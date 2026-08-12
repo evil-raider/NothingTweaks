@@ -31,7 +31,7 @@ NothingTweaks comes packed with a variety of modifications to elevate your Nothi
 ## 🚀 Installation
 
 1. Ensure your device is rooted and **[LSPosed](https://github.com/LSPosed/LSPosed)** is installed.
-2. Download the latest NothingTweaks APK from the **[Releases](#)** page and install it.
+2. Download the latest NothingTweaks APK from the **[Releases](https://github.com/RevealedSoulEven/NothingTweaks/releases/)** page and install it.
 3. Open the **LSPosed Manager** app and enable the NothingTweaks module.
 4. Reboot your device (or restart `SystemUI` and `Nothing Launcher`) to apply the changes.
 5. Open the **NothingTweaks** app to configure your settings!
