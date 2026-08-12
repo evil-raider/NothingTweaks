@@ -1,4 +1,7 @@
-# <img src="logo.png" alt="Logo" height="70" valign="middle" /> <img src="title_animated.svg" alt="NothingTweaks" height="60" valign="middle" />
+<p align="center">
+  <img src="logo.png" alt="Logo" height="70" valign="middle" />
+  <img src="title_animated.svg" alt="NothingTweaks" height="80" valign="middle" />
+</p>
 
 <br>
 
