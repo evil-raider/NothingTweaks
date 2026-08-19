@@ -29,11 +29,6 @@ class Prefs(private val delegate: XSharedPreferences) {
         return delegate.getString(key, default) ?: default
     }
 
-    fun contains(key: String): Boolean {
-        maybeReload()
-        return delegate.contains(key)
-    }
-
     fun forceReload() {
         lastReload = System.currentTimeMillis()
         delegate.reload()

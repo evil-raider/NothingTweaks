@@ -43,7 +43,6 @@ class EarphoneIconHooks : HookModule {
                         if (param.result == true) return
 
                         param.result = true
-                        val dev = param.args.getOrNull(0) as? BluetoothDevice
                     }
                 }
             )

@@ -10,8 +10,11 @@ import com.souleven.nothingos.hooks.LockScreenHooks
 import com.souleven.nothingos.hooks.Prefs
 import com.souleven.nothingos.hooks.VolumeHooks
 import com.souleven.nothingos.hooks.NavBarHooks
+import com.souleven.nothingos.hooks.ImeNavBarHooks
 import com.souleven.nothingos.hooks.AIClipboardHooks
 import com.souleven.nothingos.hooks.MiscHooks
+import com.souleven.nothingos.hooks.PowerMenuHooks
+import com.souleven.nothingos.hooks.SystemFrameworkHooks
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XSharedPreferences
@@ -37,7 +40,9 @@ class MainHook : IXposedHookLoadPackage {
         val allowedPackages = listOf(
             PKG_SYSTEMUI,
             "com.nothing.launcher",
-            "com.google.android.apps.nexuslauncher"
+            "com.google.android.apps.nexuslauncher",
+            "android",
+            "com.google.android.inputmethod.latin"
         )
         if (lpparam.packageName !in allowedPackages) return
 
@@ -66,9 +71,13 @@ class MainHook : IXposedHookLoadPackage {
         }
         if (!readable) {
             XposedBridge.log(
-                "$TAG WARNING: prefs file not readable yet. Open the NothingTweaks app once " +
+                "$TAG WARNING: prefs file not readable yet. Open the Nothing Tweaks app once " +
                         "and toggle a setting so the file is created, then restart SystemUI."
             )
+        }
+
+        if (lpparam.packageName == "android") {
+            com.souleven.nothingos.hooks.SystemHooks.init(lpparam.classLoader, prefs)
         }
 
         val hooks = mutableListOf<Pair<String, HookModule>>()
@@ -82,9 +91,17 @@ class MainHook : IXposedHookLoadPackage {
             hooks.add("FingerprintHooks" to FingerprintHooks())
             hooks.add("AIClipboardHooks" to AIClipboardHooks())
             hooks.add("MiscHooks" to MiscHooks())
+            hooks.add("PowerMenuHooks" to PowerMenuHooks())
         }
         hooks.add("NavBarHooks" to NavBarHooks())
+        if (lpparam.packageName == "com.google.android.inputmethod.latin") {
+            hooks.add("ImeNavBarHooks" to ImeNavBarHooks())
+        }
 
+        if (lpparam.packageName == "android") {
+            hooks.add("SystemFrameworkHooks" to SystemFrameworkHooks())
+        }
+        
         for ((name, hook) in hooks) {
             try {
                 hook.handleLoadPackage(lpparam, prefs)
@@ -95,17 +112,17 @@ class MainHook : IXposedHookLoadPackage {
         }
     }
 
-private fun installSelfDetection(lpparam: LoadPackageParam) {
-    try {
-        XposedHelpers.findAndHookMethod(
-            "$PKG_SELF.ModuleStatus",
-            lpparam.classLoader,
-            "isModuleActive",
-            XC_MethodReplacement.returnConstant(true)
-        )
-    } catch (t: Throwable) {
-        XposedBridge.log("$TAG Self-detection failed: ${t.message}")
-        XposedBridge.log(t)
+    private fun installSelfDetection(lpparam: LoadPackageParam) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                "$PKG_SELF.ModuleStatus",
+                lpparam.classLoader,
+                "isModuleActive",
+                XC_MethodReplacement.returnConstant(true)
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG Self-detection failed: ${t.message}")
+            XposedBridge.log(t)
+        }
     }
-}
 }

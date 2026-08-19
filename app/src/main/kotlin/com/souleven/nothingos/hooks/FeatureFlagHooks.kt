@@ -62,8 +62,6 @@ class FeatureFlagHooks : HookModule {
             return
         }
 
-        var installed = 0
-        var failed = 0
         for (method in methods) {
             try {
                 XposedHelpers.findAndHookMethod(clazz, method, object : XC_MethodHook() {
@@ -74,26 +72,16 @@ class FeatureFlagHooks : HookModule {
                         val forced = when (state) {
                             STATE_TRUE -> true
                             STATE_FALSE -> false
-                            else -> {
-                                XposedBridge.log("$TAG   [FeatureFlags] $method(): unknown state '$state', skipping")
-                                return
-                            }
+                            else -> return
                         }
 
-                        val orig = param.result as? Boolean
-                        if (orig == null) {
-                            XposedBridge.log("$TAG   [FeatureFlags] $method(): result was not Boolean, skipping")
-                            return
-                        }
+                        val orig = param.result as? Boolean ?: return
                         if (orig != forced) {
-                            // XposedBridge.log("$TAG   [FeatureFlags] $method(): orig=$orig -> forced=$forced")
                             param.result = forced
                         }
                     }
                 })
-                installed++
             } catch (t: Throwable) {
-                failed++
                 XposedBridge.log("$TAG   [FeatureFlags] FAILED to hook $method: ${t.message}")
             }
         }

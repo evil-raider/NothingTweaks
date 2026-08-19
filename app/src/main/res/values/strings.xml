@@ -1,30 +1,46 @@
 <resources>
-    <string name="app_name">NothingTweaks</string>
-
-    <!-- Status banner -->
+    <!-- App & Status -->
+    <string name="app_name">Nothing Tweaks</string>
     <string name="status_active">Module active</string>
     <string name="status_inactive">Module not active</string>
-    <string name="status_active_desc">Hooks are loaded in SystemUI.</string>
-    <string name="status_inactive_desc">Enable NothingTweaks in LSPosed, tick SystemUI in its scope, then reboot.</string>
+    <string name="status_active_desc">Hooks are loaded successfully.</string>
+    <string name="status_inactive_desc">Enable Nothing Tweaks in LSPosed, select the apps in scope, then reboot.</string>
 
-    <!-- Categories -->
-    <string name="cat_lockscreen">Lock screen</string>
-    <string name="cat_volume">Volume</string>
-    <string name="cat_capture">Screenshots &amp; Screen recording</string>
+    <!-- System -->
+    <string name="category_system">System</string>
+    
+    <string name="title_allow_180_rotation">Allow 180° Rotation</string>
+    <string name="summary_allow_180_rotation">Allow the screen to rotate completely upside-down.</string>
+    
+    <string name="pref_advanced_power_menu_title">Advanced Power Menu</string>
+    <string name="pref_advanced_power_menu_summary">Show options to reboot into Recovery and Bootloader in the power menu.</string>
 
-    <!-- Lock screen -->
+    <!-- Lockscreen -->
+    <string name="cat_lockscreen">Lockscreen</string>
+
     <string name="pref_power_off_verify">Skip power-off verification</string>
     <string name="pref_power_off_verify_desc">Do not require credentials to power off from the lock screen.</string>
+
     <string name="pref_glimpse_ads">Remove Glimpse ads wallpaper</string>
     <string name="pref_glimpse_ads_desc">Disable the sponsored magazine wallpaper on the lock screen.</string>
 
-    <!-- Volume -->
-    <string name="pref_volume_timeout">Volume panel timeout</string>
-    <string name="pref_volume_timeout_desc">Milliseconds before the volume panel hides. Leave blank for stock (3000 ms).</string>
+    <string name="title_scramble_pin">Scramble PIN</string>
+    <string name="summary_scramble_pin">Randomize the position of the PIN pad numbers.</string>
 
-    <!-- Screenshots &amp; recording -->
-    <string name="pref_watermark">Add serial number to screenshots</string>
-    <string name="pref_watermark_desc">Off by default. Turning it on draws \"SN:\" + your device serial onto every screenshot.</string>
+    <!-- Navigation -->
+    <string name="cat_navigation">Navigation</string>
+
+    <string name="pref_transparent_nav_bar">Hide Nav Bar (with Circle to Search)</string>
+    <string name="pref_transparent_nav_bar_desc">Makes the gesture pill invisible but keeps it fully functional for gestures and Circle to Search.\n\nNOTE: You MUST enable the navigation bar in your system settings first, and also ensure Circle to Search is enabled in your system settings, then turn this on to hide the pill!</string>
+
+    <string name="title_hide_ime_bar">Hide Keyboard Space</string>
+    <string name="summary_hide_ime_bar">Removes empty space under the keyboard and hides the navigation handle while typing</string>
+
+    <!-- Status bar -->
+    <string name="cat_statusbar">Status bar</string>
+
+    <string name="pref_force_earphone_icon">Earphone icon for all headphones</string>
+    <string name="pref_force_earphone_icon_desc">Shows the Nothing earbud icon instead of the generic Bluetooth icon whenever any audio device is connected.</string>
 
     <!-- Status bar clock -->
     <string name="cat_clock">Status bar clock</string>
@@ -38,6 +54,25 @@
     <string name="pref_clock_text">Custom text</string>
     <string name="pref_clock_text_desc">Appended custom text after the time. Leave blank for none. Max 24 chars.</string>
 
+    <!-- Volume -->
+    <string name="cat_volume">Volume</string>
+
+    <string name="pref_volume_timeout">Volume panel timeout</string>
+    <string name="pref_volume_timeout_desc">Milliseconds before the volume panel hides. Leave blank for stock (3000 ms).</string>
+
+    <!-- Screenshots & recording -->
+    <string name="cat_capture">Screenshots &amp; Screen recording</string>
+
+    <string name="pref_watermark">Add serial number to screenshots</string>
+    <string name="pref_watermark_desc">Off by default. Turning it on draws "SN:" + your device serial onto every screenshot.</string>
+
+    <string name="pref_record_limit">Screen Recorder Quality</string>
+    <string name="pref_record_limit_desc">Forces a resolution or frame-rate clamp in ScreenMediaRecorder. Off leaves stock behaviour untouched.</string>
+    
+    <string name="record_limit_off">Off — leave stock</string>
+    <string name="record_limit_720p">720p</string>
+    <string name="record_limit_60fps_1080p">1080p / 60fps</string>
+
     <!-- Fingerprint -->
     <string name="cat_fingerprint">Fingerprint</string>
 
@@ -50,19 +85,7 @@
     <string name="pref_fp_color">Custom colour</string>
     <string name="pref_fp_color_desc">Used when random is off.</string>
 
-    <!-- Status bar -->
-    <string name="cat_statusbar">Status bar</string>
-
-    <string name="pref_force_earphone_icon">Earphone icon for all headphones</string>
-    <string name="pref_force_earphone_icon_desc">Shows the Nothing earbud icon instead of the generic Bluetooth icon whenever any audio device is connected.</string>
-
-    <string name="pref_record_limit">Screen Recorder Quality</string>
-    <string name="pref_record_limit_desc">Forces a resolution or frame-rate clamp in ScreenMediaRecorder. Off leaves stock behaviour untouched.</string>
-    <string name="record_limit_off">Off — leave stock</string>
-    <string name="record_limit_720p">720p</string>
-    <string name="record_limit_60fps_1080p">1080p / 60fps</string>
-
-    <!-- Additional Features -->
+    <!-- Device Features -->
     <string name="cat_features">Device Features</string>
 
     <string name="pref_stepless_volume">Stepless volume</string>
@@ -72,15 +95,10 @@
     <string name="pref_super_volume_desc">Enable louder maximum volume.</string>
 
     <string name="pref_palm_touch_sleep">Palm touch sleep</string>
-    <string name="pref_palm_touch_sleep_desc">Turn off screen by covering it with your palm. Only works at lock screen.</string>
+    <string name="pref_palm_touch_sleep_desc">Turn off the screen by covering it with your palm. Only works at lock screen.</string>
 
     <string name="pref_flip_to_record">Flip to record</string>
     <string name="pref_flip_to_record_desc">Flip the phone to start voice recording. Hold the essential key to start recording.</string>
-
-    <!-- Navigation -->
-    <string name="cat_navigation">Navigation</string>
-    <string name="pref_transparent_nav_bar">Hide Nav Bar (with Circle to Search)</string>
-    <string name="pref_transparent_nav_bar_desc">Makes the gesture pill invisible but keeps it fully functional for gestures and Circle to Search.\n\nNOTE: You MUST enable the navigation bar in your system settings first, and also ensure Circle to Search is enabled in your system settings, then turn this on to hide the pill!</string>
 
     <!-- AI & Misc -->
     <string name="cat_ai_misc">AI &amp; Misc</string>
@@ -90,5 +108,7 @@
     
     <string name="pref_temp_warning_bypass">Disable Temperature Warnings</string>
     <string name="pref_temp_warning_bypass_desc">Disables the high-temperature warning popups from the system.</string>
+    
+    <string name="restart_txt">Restart</string>
 
 </resources>

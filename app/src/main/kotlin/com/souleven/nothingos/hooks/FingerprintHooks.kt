@@ -150,6 +150,4 @@ class FingerprintHooks : HookModule {
             "$TAG   [Fingerprint] unparseable colour '$raw' — expected #AARRGGBB or #RRGGBB"
         )
     }
-
-    private fun hex(color: Int): String = String.format("#%08X", color)
 }

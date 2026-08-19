@@ -1,7 +1,6 @@
 package com.souleven.nothingos.hooks
 
 import android.content.Intent
-import android.net.Uri
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers

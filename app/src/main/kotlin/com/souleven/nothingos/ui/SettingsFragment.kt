@@ -15,14 +15,40 @@ class SettingsFragment : PreferenceFragmentCompat() {
         preferenceManager.sharedPreferencesName = MainHook.PREFS_NAME
 
         @Suppress("DEPRECATION")
-        try {
-            preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
-        } catch (t: Throwable) {
-            // LSPosed not active. The settings screen still works; the hooks just cannot read it.
+        if (com.souleven.nothingos.ModuleStatus.isModuleActive()) {
+            try {
+                preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
+            } catch (t: Throwable) {
+                // Ignored
+            }
         }
 
-        setPreferencesFromResource(R.xml.preferences, rootKey)
+        try {
+            setPreferencesFromResource(R.xml.preferences, rootKey)
+        } catch (t: SecurityException) {
+            // Fallback just in case setting preferences still throws
+            preferenceManager.sharedPreferencesMode = Context.MODE_PRIVATE
+            setPreferencesFromResource(R.xml.preferences, rootKey)
+        }
+
         wireFingerprintDependencies()
+
+        // Use the reusable reboot function for preferences that require a reboot
+        requireRebootOnEnable("allow_180_rotation")
+        requireRebootOnEnable("pref_advanced_power_menu")
+    }
+
+    private fun requireRebootOnEnable(preferenceKey: String) {
+        findPreference<SwitchPreferenceCompat>(preferenceKey)?.setOnPreferenceChangeListener { _, newValue ->
+            if (newValue == true) {
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "Please reboot your phone to enable this feature.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+            true
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

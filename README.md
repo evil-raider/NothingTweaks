@@ -16,10 +16,13 @@ NothingTweaks comes packed with a variety of modifications to elevate your Nothi
 
 * **Gemini AI Chip**: Redirect the clipboard's AI integration to Gemini instead of ChatGPT.
 * **Navigation Bar**: Hide the navigation pill while keeping gestures and Circle to Search active.
+* **180° Screen Rotation**: Allows screen to be rotated 180°.
+* **Scramble PIN**: Nothing to justify this.
+* **Hide Space Under Keyboard**: Nothing to justify this too.
 * **Screen Recording Limit**: Force screen recordings to cap at 720p or 1080p/60fps.
 * **Fingerprint Scanner**: Set a custom or random color for the fingerprint animation.
 * **Bluetooth Icon**: Show the Nothing earphone icon for all connected Bluetooth devices.
-* **Volume Timeout**: Adjust how long the volume panel stays visible.
+* **Advanced Power Menu**: Show options to reboot to recovery or bootloader in the power menu.
 * **Power-Off Verify**: Skip credential verification when powering off from the lock screen.
 * **Glimpse Ads**: Remove sponsored Glimpse Ads from the lock screen.
 * **Clock Customization**: Add seconds, day of the week, or custom text to the status bar clock.

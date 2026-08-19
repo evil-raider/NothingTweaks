@@ -7,6 +7,13 @@
         app:iconSpaceReserved="false">
 
         <SwitchPreferenceCompat
+            app:key="scramble_pin"
+            app:title="@string/title_scramble_pin"
+            app:summary="@string/summary_scramble_pin"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
             app:key="disable_glimpse_ads"
             app:title="@string/pref_glimpse_ads"
             app:summary="@string/pref_glimpse_ads_desc"
@@ -164,6 +171,13 @@
             app:summary="@string/pref_transparent_nav_bar_desc"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="pref_hide_ime_bar"
+            app:title="@string/title_hide_ime_bar"
+            app:summary="@string/summary_hide_ime_bar"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -181,6 +195,26 @@
             app:key="temp_warning_bypass"
             app:title="@string/pref_temp_warning_bypass"
             app:summary="@string/pref_temp_warning_bypass_desc"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+
+
+    <PreferenceCategory
+        app:title="@string/category_system"
+        app:iconSpaceReserved="false">
+        <SwitchPreferenceCompat
+            app:key="allow_180_rotation"
+            app:title="@string/title_allow_180_rotation"
+            app:summary="@string/summary_allow_180_rotation"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="pref_advanced_power_menu"
+            app:title="@string/pref_advanced_power_menu_title"
+            app:summary="@string/pref_advanced_power_menu_summary"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>

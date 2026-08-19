@@ -9,7 +9,13 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.google.android.material.appbar.CollapsingToolbarLayout
+import android.widget.Toast
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.card.MaterialCardView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.souleven.nothingos.ModuleStatus
 import com.souleven.nothingos.R
 
@@ -22,6 +28,42 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<CollapsingToolbarLayout>(R.id.collapsing_toolbar).title =
             getString(R.string.app_name)
+
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        toolbar.inflateMenu(R.menu.main_menu)
+        
+        CoroutineScope(Dispatchers.Main).launch {
+            val hasRoot = withContext(Dispatchers.IO) {
+                try {
+                    val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+                    process.waitFor() == 0
+                } catch (e: Exception) {
+                    false
+                }
+            }
+            if (hasRoot) {
+                toolbar.setOnMenuItemClickListener { item ->
+                    if (item.itemId == R.id.action_restart) {
+                        Toast.makeText(this@MainActivity, "Restarting...", Toast.LENGTH_SHORT).show()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            try {
+                                Runtime.getRuntime().exec(arrayOf("su", "-c", "pkill systemui; pkill launcher; pkill -f com.google.android.inputmethod.latin"))
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                        true
+                    } else false
+                }
+            } else {
+                toolbar.setOnMenuItemClickListener { item ->
+                    if (item.itemId == R.id.action_restart) {
+                        Toast.makeText(this@MainActivity, "Root permission not granted", Toast.LENGTH_SHORT).show()
+                        true
+                    } else false
+                }
+            }
+        }
 
         applyInsets()
         bindStatusBanner()
