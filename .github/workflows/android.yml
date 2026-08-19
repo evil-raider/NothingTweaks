@@ -7,6 +7,12 @@ on:
         description: 'Version name for the release (e.g., 1.0)'
         required: true
         default: '1.0'
+      
+      release:
+        description: 'Create a GitHub Release'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -65,16 +71,23 @@ jobs:
           echo "$SHA256"
           echo "=========================================="
           echo ""
+      
+      - name: Upload APK to Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NothingTweaks-v${{ github.event.inputs.version_name }}-debug
+          path: ${{ steps.locate_apk.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Create GitHub Release
+        if: ${{ inputs.release }}
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ${{ steps.locate_apk.outputs.apk_path }}
-            apk-sha256.txt
-          name: Release v${{ github.event.inputs.version_name }}
-          tag_name: v${{ github.event.inputs.version_name }}
+          files: ${{ steps.locate_apk.outputs.apk_path }}
+          name: Release v${{ inputs.version_name }}
+          tag_name: v${{ inputs.version_name }}
           body: |
             > [!NOTE]
             > **Verified Build:** This release binary was compiled directly by GitHub Actions.
