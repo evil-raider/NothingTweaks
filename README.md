@@ -1,6 +1,6 @@
 <p align="center">
   <img src="logo.png" alt="Logo" height="70" valign="middle" />
-  <img src="title_animated.svg" alt="NothingTweaks" height="80" valign="middle" />
+  <img src="title_animated.svg" alt="Nothing Tweaks" height="80" valign="middle" />
 </p>
 
 <br>
@@ -12,7 +12,7 @@ By leveraging the modern Xposed framework, this module injects deep system-level
 
 ## ✨ Features
 
-NothingTweaks comes packed with a variety of modifications to elevate your Nothing OS experience:
+Nothing Tweaks comes packed with a variety of modifications to elevate your Nothing OS experience:
 
 * **Gemini AI Chip**: Redirect the clipboard's AI integration to Gemini instead of ChatGPT.
 * **Navigation Bar**: Hide the navigation pill while keeping gestures and Circle to Search active.
@@ -34,10 +34,10 @@ NothingTweaks comes packed with a variety of modifications to elevate your Nothi
 ## 🚀 Installation
 
 1. Ensure your device is rooted and **[LSPosed](https://github.com/LSPosed/LSPosed)** is installed.
-2. Download the latest NothingTweaks APK from the **[Releases](https://github.com/RevealedSoulEven/NothingTweaks/releases/)** page and install it.
-3. Open the **LSPosed Manager** app and enable the NothingTweaks module.
+2. Download the latest Nothing Tweaks APK from the **[Releases](https://github.com/RevealedSoulEven/NothingTweaks/releases/)** page and install it.
+3. Open the **LSPosed Manager** app and enable the Nothing Tweaks module.
 4. Reboot your device (or restart `SystemUI` and `Nothing Launcher`) to apply the changes.
-5. Open the **NothingTweaks** app to configure your settings!
+5. Open the **Nothing Tweaks** app to configure your settings!
 
 
 ## 🤝 Credits & Acknowledgements
@@ -46,6 +46,7 @@ This project would not have been possible without the amazing work of the Androi
 
 * **[rovo89](https://github.com/rovo89)** - For creating the original [Xposed Framework](https://github.com/rovo89/Xposed), which pioneered this level of Android customization.
 * **[LSPosed Team](https://github.com/LSPosed/LSPosed)** - For maintaining and advancing the modern ART hooking framework that powers this module today.
+* **[Rares6567](https://github.com/Rares6567)** - For _"hide space under keyboard"_ feature. And his project [NothingXpert](https://github.com/Rares6567/NothingXpert).
 
 <br>
 
