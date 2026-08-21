@@ -44,7 +44,6 @@ class MainActivity : AppCompatActivity() {
             if (hasRoot) {
                 toolbar.setOnMenuItemClickListener { item ->
                     if (item.itemId == R.id.action_restart) {
-                        Toast.makeText(this@MainActivity, "Restarting...", Toast.LENGTH_SHORT).show()
                         CoroutineScope(Dispatchers.IO).launch {
                             try {
                                 Runtime.getRuntime().exec(arrayOf("su", "-c", "pkill systemui; pkill launcher; pkill -f com.google.android.inputmethod.latin"))
