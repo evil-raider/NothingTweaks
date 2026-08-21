@@ -31,7 +31,7 @@ class SystemFrameworkHooks : HookModule {
                             val context = XposedHelpers.getObjectField(ams, "mContext") as? Context
                             
                             if (context != null) {
-                                registerRebootReceiver(context)
+                                registerSystemReceiver(context)
                             } else {
                                 XposedBridge.log("$TAG SystemFrameworkHooks: mContext is null in AMS")
                             }
@@ -45,7 +45,7 @@ class SystemFrameworkHooks : HookModule {
         }
     }
 
-    private fun registerRebootReceiver(context: Context) {
+    private fun registerSystemReceiver(context: Context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 val action = intent.action
@@ -62,6 +62,17 @@ class SystemFrameworkHooks : HookModule {
                     } catch (e: Exception) {
                         XposedBridge.log("$TAG Failed to set sys.powerctl from framework: ${e.message}")
                     }
+                } else if (action == "com.souleven.nothingos.FORCE_STOP_APP") {
+                    val packageName = intent.getStringExtra("package_name")
+                    if (packageName != null) {
+                        try {
+                            val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                            val method = am.javaClass.getMethod("forceStopPackage", String::class.java)
+                            method.invoke(am, packageName)
+                        } catch (e: Exception) {
+                            // Silently fail if something goes wrong
+                        }
+                    }
                 }
             }
         }
@@ -69,6 +80,7 @@ class SystemFrameworkHooks : HookModule {
         val filter = IntentFilter().apply {
             addAction("com.souleven.nothingos.REBOOT_RECOVERY")
             addAction("com.souleven.nothingos.REBOOT_BOOTLOADER")
+            addAction("com.souleven.nothingos.FORCE_STOP_APP")
         }
 
         try {
@@ -80,6 +92,6 @@ class SystemFrameworkHooks : HookModule {
             // Fallback for older Android versions
             context.registerReceiver(receiver, filter)
         }
-        XposedBridge.log("$TAG Registered RebootReceiver in system_server")
+        XposedBridge.log("$TAG Registered SystemReceiver in system_server")
     }
 }

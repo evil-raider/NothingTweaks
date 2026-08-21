@@ -14,6 +14,7 @@ import com.souleven.nothingos.hooks.ImeNavBarHooks
 import com.souleven.nothingos.hooks.AIClipboardHooks
 import com.souleven.nothingos.hooks.MiscHooks
 import com.souleven.nothingos.hooks.PowerMenuHooks
+import com.souleven.nothingos.hooks.BackGestureKillHooks
 import com.souleven.nothingos.hooks.SystemFrameworkHooks
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodReplacement
@@ -40,7 +41,6 @@ class MainHook : IXposedHookLoadPackage {
         val allowedPackages = listOf(
             PKG_SYSTEMUI,
             "com.nothing.launcher",
-            "com.google.android.apps.nexuslauncher",
             "android",
             "com.google.android.inputmethod.latin"
         )
@@ -92,6 +92,7 @@ class MainHook : IXposedHookLoadPackage {
             hooks.add("AIClipboardHooks" to AIClipboardHooks())
             hooks.add("MiscHooks" to MiscHooks())
             hooks.add("PowerMenuHooks" to PowerMenuHooks())
+            hooks.add("BackGestureKillHooks" to BackGestureKillHooks())
         }
         hooks.add("NavBarHooks" to NavBarHooks())
         if (lpparam.packageName == "com.google.android.inputmethod.latin") {

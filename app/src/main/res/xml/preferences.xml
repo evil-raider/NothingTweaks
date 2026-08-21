@@ -178,6 +178,13 @@
             app:summary="@string/summary_hide_ime_bar"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="pref_back_gesture_kill"
+            app:title="@string/pref_back_gesture_kill_title"
+            app:summary="@string/pref_back_gesture_kill_summary"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
     <PreferenceCategory
