@@ -66,6 +66,61 @@ class SystemFrameworkHooks : HookModule {
                     val packageName = intent.getStringExtra("package_name")
                     if (packageName != null) {
                         try {
+                            // First, remove from recents before force stopping
+                            try {
+                                val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+
+                                val getRecentTasksMethod = am.javaClass.getMethod("getRecentTasks", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                                val recentTasks = getRecentTasksMethod.invoke(am, 100, 2) as? List<*>
+
+                                val atmClass = Class.forName("android.app.ActivityTaskManager")
+                                val getServiceMethod = atmClass.getMethod("getService")
+                                val iAtm = getServiceMethod.invoke(null)
+                                val removeTaskMethod = iAtm.javaClass.getMethod("removeTask", Int::class.javaPrimitiveType)
+                                
+                                if (recentTasks != null) {
+                                    for (taskObj in recentTasks) {
+                                        if (taskObj == null) continue
+                                        
+                                        var match = false
+                                        try {
+                                            val baseIntentField = taskObj.javaClass.getField("baseIntent")
+                                            val baseIntent = baseIntentField.get(taskObj) as? Intent
+                                            if (baseIntent?.component?.packageName == packageName) match = true
+                                        } catch (e: Exception) {}
+                                        
+                                        if (!match) {
+                                            try {
+                                                val topActivityField = taskObj.javaClass.getField("topActivity")
+                                                val topActivity = topActivityField.get(taskObj) as? android.content.ComponentName
+                                                if (topActivity?.packageName == packageName) match = true
+                                            } catch (e: Exception) {}
+                                        }
+                                        
+                                        if (!match) {
+                                            try {
+                                                val baseActivityField = taskObj.javaClass.getField("baseActivity")
+                                                val baseActivity = baseActivityField.get(taskObj) as? android.content.ComponentName
+                                                if (baseActivity?.packageName == packageName) match = true
+                                            } catch (e: Exception) {}
+                                        }
+                                        
+                                        if (match) {
+                                            try {
+                                                val taskIdField = taskObj.javaClass.getField("taskId")
+                                                val taskId = taskIdField.getInt(taskObj)
+                                                removeTaskMethod.invoke(iAtm, taskId)
+                                            } catch (e: Exception) {
+                                                // Silently fail
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                // Silently fail
+                            }
+
+                            // force stop
                             val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
                             val method = am.javaClass.getMethod("forceStopPackage", String::class.java)
                             method.invoke(am, packageName)

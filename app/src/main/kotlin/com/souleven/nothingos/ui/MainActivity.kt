@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.inflateMenu(R.menu.main_menu)
-        
+
         CoroutineScope(Dispatchers.Main).launch {
             val hasRoot = withContext(Dispatchers.IO) {
                 try {
