@@ -1,0 +1,119 @@
+<resources>
+    <!-- App & Status -->
+    <string name="app_name">Nothing Tweaks</string>
+    <string name="status_active">モジュール有効</string>
+    <string name="status_inactive">モジュール無効</string>
+    <string name="status_active_desc">フックが正常に読み込まれました。</string>
+    <string name="status_inactive_desc">LSPosedでNothing Tweaksを有効にし、対象アプリを選択してから再起動してください。</string>
+
+    <!-- System -->
+    <string name="category_system">システム</string>
+    
+    <string name="title_allow_180_rotation">180度回転を許可</string>
+    <string name="summary_allow_180_rotation">画面が完全に逆さまになるのを許可します。</string>
+    
+    <string name="pref_advanced_power_menu_title">高度な電源メニュー</string>
+    <string name="pref_advanced_power_menu_summary">電源メニューにリカバリとブートローダーへの再起動オプションを表示します。</string>
+
+    <!-- Lockscreen -->
+    <string name="cat_lockscreen">ロック画面</string>
+
+    <string name="pref_power_off_verify">電源オフの確認をスキップ</string>
+    <string name="pref_power_off_verify_desc">ロック画面からデバイスの電源をオフにする際に資格情報を要求しません。</string>
+
+    <string name="pref_glimpse_ads">Glimpse広告の壁紙を削除</string>
+    <string name="pref_glimpse_ads_desc">ロック画面のスポンサー付きマガジン壁紙を無効にします。</string>
+
+    <string name="title_scramble_pin">PINをスクランブル</string>
+    <string name="summary_scramble_pin">PINパッドの数字の配置をランダムにします。</string>
+
+    <string name="title_hide_lockscreen_clock">時計を隠す</string>
+    <string name="summary_hide_lockscreen_clock">ロック画面から時計を非表示にします。被写界深度エフェクト壁紙のサードパーティアプリを使用する場合に便利です。</string>
+
+    <!-- Navigation -->
+    <string name="cat_navigation">ナビゲーション</string>
+
+    <string name="pref_transparent_nav_bar">ナビゲーションバーを隠す (Circle to Search対応)</string>
+    <string name="pref_transparent_nav_bar_desc">ジェスチャーバーを透明にしますが、ジェスチャーやCircle to Searchの機能は完全に維持します。\n\n注意: バーを非表示にするには、まずシステム設定でナビゲーションバーを有効にし、Circle to Searchがオンになっていることを確認してから、この設定をオンにしてください！</string>
+
+    <string name="title_hide_ime_bar">キーボードのスペースを隠す</string>
+    <string name="summary_hide_ime_bar">入力時にキーボードの下の空白部分を削除し、ナビゲーションハンドルを非表示にします。</string>
+
+    <string name="pref_back_gesture_kill_title">戻るジェスチャーの長押しでアプリを強制終了</string>
+    <string name="pref_back_gesture_kill_summary">戻るスワイプジェスチャーを押し続けて離すと、フォアグラウンドのアプリを強制終了します。</string>
+
+    <!-- Status bar -->
+    <string name="cat_statusbar">ステータスバー</string>
+
+    <string name="pref_force_earphone_icon">すべてのヘッドフォンにイヤホンアイコンを使用</string>
+    <string name="pref_force_earphone_icon_desc">オーディオデバイスが接続されている場合、一般的なBluetoothアイコンの代わりにNothingのイヤホンアイコンを表示します。</string>
+
+    <!-- Status bar clock -->
+    <string name="cat_clock">ステータスバーの時計</string>
+
+    <string name="pref_clock_seconds">秒を表示</string>
+    <string name="pref_clock_seconds_desc">毎秒時を刻みます。</string>
+
+    <string name="pref_clock_dow">曜日を表示</string>
+    <string name="pref_clock_dow_desc">曜日の省略形を先頭に追加します (例: 月 10:10)。</string>
+
+    <string name="pref_clock_text">カスタムテキスト</string>
+    <string name="pref_clock_text_desc">時間の後に追加するカスタムテキスト。空白の場合は追加されません。最大24文字。</string>
+
+    <!-- Volume -->
+    <string name="cat_volume">音量</string>
+
+    <string name="pref_volume_timeout">音量パネルのタイムアウト</string>
+    <string name="pref_volume_timeout_desc">音量パネルが非表示になるまでのミリ秒数。空白の場合はデフォルト (3000ミリ秒) です。</string>
+
+    <!-- Screenshots & recording -->
+    <string name="cat_capture">スクリーンショットと画面録画</string>
+
+    <string name="pref_watermark">スクリーンショットにシリアル番号を追加</string>
+    <string name="pref_watermark_desc">デフォルトではオフです。オンにすると、すべてのスクリーンショットに「SN:」+デバイスのシリアル番号が描画されます。</string>
+
+    <string name="pref_record_limit">画面録画の画質</string>
+    <string name="pref_record_limit_desc">ScreenMediaRecorderの解像度またはフレームレートの制限を強制します。オフの場合、デフォルトの動作は変更されません。</string>
+    
+    <string name="record_limit_off">オフ — デフォルトのまま</string>
+    <string name="record_limit_720p">720p</string>
+    <string name="record_limit_60fps_1080p">1080p / 60fps</string>
+
+    <!-- Fingerprint -->
+    <string name="cat_fingerprint">指紋認証</string>
+
+    <string name="pref_fp_enabled">スキャンドットを色付けする</string>
+    <string name="pref_fp_enabled_desc">センサーが指を読み取るときに指の周りに表示されるアニメーションドットの色を変更します。</string>
+
+    <string name="pref_fp_random">タップするたびにランダムな色</string>
+    <string name="pref_fp_random_desc">センサーに触れるたびに新しい色になります。自分で色を選ぶ場合はこれをオフにしてください。</string>
+
+    <string name="pref_fp_color">カスタムカラー</string>
+    <string name="pref_fp_color_desc">ランダムがオフの場合に使用されます。</string>
+
+    <!-- Device Features -->
+    <string name="cat_features">デバイス機能</string>
+
+    <string name="pref_stepless_volume">無段階音量調節</string>
+    <string name="pref_stepless_volume_desc">スムーズな無段階の音量調節を有効にします。</string>
+
+    <string name="pref_super_volume">スーパーボリュームブースト</string>
+    <string name="pref_super_volume_desc">最大音量をさらに上げます。</string>
+
+    <string name="pref_palm_touch_sleep">手のひらタッチでスリープ</string>
+    <string name="pref_palm_touch_sleep_desc">画面を手のひらで覆ってオフにします。ロック画面でのみ機能します。</string>
+
+    <string name="pref_flip_to_record">裏返して録音</string>
+    <string name="pref_flip_to_record_desc">電話を裏返して音声録音を開始します。録音を開始するにはEssentialキーを長押しします。</string>
+
+    <!-- AI & Misc -->
+    <string name="cat_ai_misc">AIとその他</string>
+    
+    <string name="pref_ai_clipboard_gemini">Gemini AIクリップボードチップ</string>
+    <string name="pref_ai_clipboard_gemini_desc">ChatGPTクリップボードAI機能をGeminiで強制的に動作させます。</string>
+    
+    <string name="pref_temp_warning_bypass">温度警告を無効にする</string>
+    <string name="pref_temp_warning_bypass_desc">システムの高温警告ポップアップを無効にします。</string>
+    
+    <string name="restart_txt">再起動</string>
+</resources>

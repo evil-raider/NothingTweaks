@@ -1,0 +1,119 @@
+<resources>
+    <!-- App & Status -->
+    <string name="app_name">Nothing Tweaks</string>
+    <string name="status_active">Módulo activo</string>
+    <string name="status_inactive">Módulo inactivo</string>
+    <string name="status_active_desc">Los hooks se cargaron correctamente.</string>
+    <string name="status_inactive_desc">Habilita Nothing Tweaks en LSPosed, selecciona las aplicaciones objetivo y luego reinicia.</string>
+
+    <!-- System -->
+    <string name="category_system">Sistema</string>
+    
+    <string name="title_allow_180_rotation">Permitir rotación de 180°</string>
+    <string name="summary_allow_180_rotation">Permitir que la pantalla gire completamente al revés.</string>
+    
+    <string name="pref_advanced_power_menu_title">Menú de apagado avanzado</string>
+    <string name="pref_advanced_power_menu_summary">Muestra opciones para reiniciar en Recovery y Bootloader en el menú de apagado.</string>
+
+    <!-- Lockscreen -->
+    <string name="cat_lockscreen">Pantalla de bloqueo</string>
+
+    <string name="pref_power_off_verify">Omitir verificación al apagar</string>
+    <string name="pref_power_off_verify_desc">No requerir credenciales para apagar el dispositivo desde la pantalla de bloqueo.</string>
+
+    <string name="pref_glimpse_ads">Eliminar fondo de pantalla de anuncios Glimpse</string>
+    <string name="pref_glimpse_ads_desc">Desactivar el fondo de pantalla de revista patrocinado en la pantalla de bloqueo.</string>
+
+    <string name="title_scramble_pin">Aleatorizar PIN</string>
+    <string name="summary_scramble_pin">Aleatorizar la posición de los números del teclado del PIN.</string>
+
+    <string name="title_hide_lockscreen_clock">Ocultar reloj</string>
+    <string name="summary_hide_lockscreen_clock">Oculta el reloj en la pantalla de bloqueo. Útil al usar aplicaciones de terceros para fondos de pantalla con efecto de profundidad.</string>
+
+    <!-- Navigation -->
+    <string name="cat_navigation">Navegación</string>
+
+    <string name="pref_transparent_nav_bar">Ocultar barra de navegación (con Circle to Search)</string>
+    <string name="pref_transparent_nav_bar_desc">Hace invisible la barra de navegación pero la mantiene totalmente funcional para gestos y Circle to Search.\n\nNOTA: ¡DEBES habilitar primero la barra de navegación en los ajustes del sistema y asegurarte de que Circle to Search esté habilitado, luego activa esto para ocultar la barra!</string>
+
+    <string name="title_hide_ime_bar">Ocultar espacio del teclado</string>
+    <string name="summary_hide_ime_bar">Elimina el espacio vacío debajo del teclado y oculta el asa de navegación al escribir</string>
+
+    <string name="pref_back_gesture_kill_title">Deslizar atrás prolongado para forzar cierre</string>
+    <string name="pref_back_gesture_kill_summary">Mantén pulsado el gesto de volver atrás y luego suéltalo para forzar el cierre de la aplicación en primer plano.</string>
+
+    <!-- Status bar -->
+    <string name="cat_statusbar">Barra de estado</string>
+
+    <string name="pref_force_earphone_icon">Icono de auriculares para todos los auriculares</string>
+    <string name="pref_force_earphone_icon_desc">Muestra el icono de auriculares Nothing en lugar del icono genérico de Bluetooth cada vez que se conecta cualquier dispositivo de audio.</string>
+
+    <!-- Status bar clock -->
+    <string name="cat_clock">Reloj de barra de estado</string>
+
+    <string name="pref_clock_seconds">Mostrar segundos</string>
+    <string name="pref_clock_seconds_desc">Marca cada segundo.</string>
+
+    <string name="pref_clock_dow">Mostrar día de la semana</string>
+    <string name="pref_clock_dow_desc">Añade el día de la semana abreviado, ej. Lun 10:10.</string>
+
+    <string name="pref_clock_text">Texto personalizado</string>
+    <string name="pref_clock_text_desc">Texto personalizado después de la hora. Déjalo en blanco para ninguno. Máx 24 caracteres.</string>
+
+    <!-- Volume -->
+    <string name="cat_volume">Volumen</string>
+
+    <string name="pref_volume_timeout">Tiempo de espera del panel de volumen</string>
+    <string name="pref_volume_timeout_desc">Milisegundos antes de que el panel de volumen se oculte. Déjalo en blanco para usar el de fábrica (3000 ms).</string>
+
+    <!-- Screenshots & recording -->
+    <string name="cat_capture">Capturas y Grabación de pantalla</string>
+
+    <string name="pref_watermark">Añadir número de serie a las capturas</string>
+    <string name="pref_watermark_desc">Desactivado por defecto. Al activarlo dibuja "SN:" + el número de serie de tu dispositivo en cada captura de pantalla.</string>
+
+    <string name="pref_record_limit">Calidad de grabación de pantalla</string>
+    <string name="pref_record_limit_desc">Fuerza un límite de resolución o fotogramas en ScreenMediaRecorder. Apagado mantiene el comportamiento de fábrica.</string>
+    
+    <string name="record_limit_off">Apagado — mantener de fábrica</string>
+    <string name="record_limit_720p">720p</string>
+    <string name="record_limit_60fps_1080p">1080p / 60fps</string>
+
+    <!-- Fingerprint -->
+    <string name="cat_fingerprint">Huella digital</string>
+
+    <string name="pref_fp_enabled">Colorear los puntos de escaneo</string>
+    <string name="pref_fp_enabled_desc">Cambia el color de los puntos animados que aparecen alrededor del dedo mientras el sensor lo lee.</string>
+
+    <string name="pref_fp_random">Color aleatorio cada toque</string>
+    <string name="pref_fp_random_desc">Un color nuevo cada vez que tocas el sensor. Desactiva esto para elegir tu propio color a continuación.</string>
+
+    <string name="pref_fp_color">Color personalizado</string>
+    <string name="pref_fp_color_desc">Se usa cuando el aleatorio está apagado.</string>
+
+    <!-- Device Features -->
+    <string name="cat_features">Características del dispositivo</string>
+
+    <string name="pref_stepless_volume">Volumen continuo</string>
+    <string name="pref_stepless_volume_desc">Habilita un control de volumen suave y continuo.</string>
+
+    <string name="pref_super_volume">Súper aumento de volumen</string>
+    <string name="pref_super_volume_desc">Habilita un volumen máximo más alto.</string>
+
+    <string name="pref_palm_touch_sleep">Apagar con la palma</string>
+    <string name="pref_palm_touch_sleep_desc">Apaga la pantalla cubriéndola con la palma. Solo funciona en la pantalla de bloqueo.</string>
+
+    <string name="pref_flip_to_record">Voltear para grabar</string>
+    <string name="pref_flip_to_record_desc">Voltea el teléfono para iniciar la grabación de voz. Mantén pulsada la tecla Essential para iniciar la grabación.</string>
+
+    <!-- AI & Misc -->
+    <string name="cat_ai_misc">IA &amp; Otros</string>
+    
+    <string name="pref_ai_clipboard_gemini">Chip del portapapeles Gemini AI</string>
+    <string name="pref_ai_clipboard_gemini_desc">Fuerza que la función de IA del portapapeles de ChatGPT funcione con Gemini.</string>
+    
+    <string name="pref_temp_warning_bypass">Desactivar advertencias de temperatura</string>
+    <string name="pref_temp_warning_bypass_desc">Desactiva las ventanas emergentes del sistema sobre temperatura alta.</string>
+    
+    <string name="restart_txt">Reiniciar</string>
+</resources>

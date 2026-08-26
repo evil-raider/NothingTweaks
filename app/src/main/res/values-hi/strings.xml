@@ -1,0 +1,119 @@
+<resources>
+    <!-- App & Status -->
+    <string name="app_name">Nothing Tweaks</string>
+    <string name="status_active">मॉड्यूल सक्रिय</string>
+    <string name="status_inactive">मॉड्यूल निष्क्रिय</string>
+    <string name="status_active_desc">हुक सफलतापूर्वक लोड हो गए हैं।</string>
+    <string name="status_inactive_desc">LSPosed में Nothing Tweaks सक्षम करें, ऐप्स चुनें, और फिर रीबूट करें।</string>
+
+    <!-- System -->
+    <string name="category_system">सिस्टम</string>
+    
+    <string name="title_allow_180_rotation">180° रोटेशन की अनुमति दें</string>
+    <string name="summary_allow_180_rotation">स्क्रीन को पूरी तरह से उल्टा घुमाने की अनुमति दें।</string>
+    
+    <string name="pref_advanced_power_menu_title">उन्नत पावर मेनू</string>
+    <string name="pref_advanced_power_menu_summary">पावर मेनू में Recovery और Bootloader में रीबूट करने के विकल्प दिखाएं।</string>
+
+    <!-- Lockscreen -->
+    <string name="cat_lockscreen">लॉकस्क्रीन</string>
+
+    <string name="pref_power_off_verify">पावर-ऑफ़ सत्यापन छोड़ें</string>
+    <string name="pref_power_off_verify_desc">लॉक स्क्रीन से डिवाइस को बंद करने के लिए क्रेडेंशियल की आवश्यकता नहीं है।</string>
+
+    <string name="pref_glimpse_ads">Glimpse विज्ञापन वॉलपेपर हटाएं</string>
+    <string name="pref_glimpse_ads_desc">लॉक स्क्रीन पर प्रायोजित पत्रिका वॉलपेपर अक्षम करें।</string>
+
+    <string name="title_scramble_pin">PIN को स्क्रैम्बल करें</string>
+    <string name="summary_scramble_pin">PIN पैड नंबरों की स्थिति को यादृच्छिक करें।</string>
+
+    <string name="title_hide_lockscreen_clock">घड़ी छिपाएं</string>
+    <string name="summary_hide_lockscreen_clock">लॉकस्क्रीन से घड़ी छिपाएं। गहराई प्रभाव वाले वॉलपेपर के लिए तृतीय-पक्ष ऐप्स का उपयोग करते समय उपयोगी।</string>
+
+    <!-- Navigation -->
+    <string name="cat_navigation">नेविगेशन</string>
+
+    <string name="pref_transparent_nav_bar">नेविगेशन बार छिपाएं (Circle to Search के साथ)</string>
+    <string name="pref_transparent_nav_bar_desc">जेस्चर पिल को अदृश्य बनाता है लेकिन जेस्चर और Circle to Search के लिए इसे पूरी तरह कार्यात्मक रखता है।\n\nनोट: आपको पहले अपने सिस्टम सेटिंग्स में नेविगेशन बार सक्षम करना होगा और Circle to Search भी चालू करना होगा, फिर इसे छिपाने के लिए इसे चालू करें!</string>
+
+    <string name="title_hide_ime_bar">कीबोर्ड स्पेस छिपाएं</string>
+    <string name="summary_hide_ime_bar">टाइप करते समय कीबोर्ड के नीचे की खाली जगह को हटाता है और नेविगेशन हैंडल को छिपाता है</string>
+
+    <string name="pref_back_gesture_kill_title">ऐप को बंद करने के लिए लंबा बैक स्वाइप</string>
+    <string name="pref_back_gesture_kill_summary">बैक स्वाइप जेस्चर को दबाकर रखें और फिर वर्तमान ऐप को ज़बरदस्ती बंद करने के लिए छोड़ दें।</string>
+
+    <!-- Status bar -->
+    <string name="cat_statusbar">स्टेटस बार</string>
+
+    <string name="pref_force_earphone_icon">सभी हेडफ़ोन के लिए इयरफ़ोन आइकन</string>
+    <string name="pref_force_earphone_icon_desc">कोई भी ऑडियो डिवाइस कनेक्ट होने पर सामान्य ब्लूटूथ आइकन के बजाय Nothing इयरबड आइकन दिखाता है।</string>
+
+    <!-- Status bar clock -->
+    <string name="cat_clock">स्टेटस बार घड़ी</string>
+
+    <string name="pref_clock_seconds">सेकंड दिखाएं</string>
+    <string name="pref_clock_seconds_desc">हर सेकंड टिक करता है।</string>
+
+    <string name="pref_clock_dow">सप्ताह का दिन दिखाएं</string>
+    <string name="pref_clock_dow_desc">सप्ताह के छोटे दिन को पहले जोड़ता है, उदा. सोम 10:10।</string>
+
+    <string name="pref_clock_text">कस्टम टेक्स्ट</string>
+    <string name="pref_clock_text_desc">समय के बाद जोड़ा गया कस्टम टेक्स्ट। खाली छोड़ने पर कुछ नहीं जुड़ेगा। अधिकतम 24 अक्षर।</string>
+
+    <!-- Volume -->
+    <string name="cat_volume">वॉल्यूम</string>
+
+    <string name="pref_volume_timeout">वॉल्यूम पैनल टाइमआउट</string>
+    <string name="pref_volume_timeout_desc">वॉल्यूम पैनल छिपने से पहले के मिलीसेकंड। डिफ़ॉल्ट (3000 ms) के लिए खाली छोड़ दें।</string>
+
+    <!-- Screenshots & recording -->
+    <string name="cat_capture">स्क्रीनशॉट और स्क्रीन रिकॉर्डिंग</string>
+
+    <string name="pref_watermark">स्क्रीनशॉट में सीरियल नंबर जोड़ें</string>
+    <string name="pref_watermark_desc">डिफ़ॉल्ट रूप से बंद। इसे चालू करने पर हर स्क्रीनशॉट पर "SN:" + आपके डिवाइस का सीरियल नंबर लिखा जाएगा।</string>
+
+    <string name="pref_record_limit">स्क्रीन रिकॉर्डर क्वालिटी</string>
+    <string name="pref_record_limit_desc">ScreenMediaRecorder में रिज़ॉल्यूशन या फ्रेम-रेट सीमा लागू करता है। बंद रखने पर डिफ़ॉल्ट व्यवहार रहता है।</string>
+    
+    <string name="record_limit_off">बंद — डिफ़ॉल्ट रखें</string>
+    <string name="record_limit_720p">720p</string>
+    <string name="record_limit_60fps_1080p">1080p / 60fps</string>
+
+    <!-- Fingerprint -->
+    <string name="cat_fingerprint">फ़िंगरप्रिंट</string>
+
+    <string name="pref_fp_enabled">स्कैनिंग डॉट्स को रंगीन करें</string>
+    <string name="pref_fp_enabled_desc">सेंसर द्वारा आपकी उंगली पढ़ने के दौरान उसके चारों ओर दिखने वाले एनिमेटेड डॉट्स का रंग बदलता है।</string>
+
+    <string name="pref_fp_random">हर टैप पर यादृच्छिक रंग</string>
+    <string name="pref_fp_random_desc">हर बार जब आप सेंसर को छूते हैं तो एक नया रंग। अपना रंग चुनने के लिए इसे नीचे से बंद करें।</string>
+
+    <string name="pref_fp_color">कस्टम रंग</string>
+    <string name="pref_fp_color_desc">यादृच्छिक बंद होने पर उपयोग किया जाता है।</string>
+
+    <!-- Device Features -->
+    <string name="cat_features">डिवाइस की विशेषताएं</string>
+
+    <string name="pref_stepless_volume">स्टेपलेस वॉल्यूम</string>
+    <string name="pref_stepless_volume_desc">सुचारू स्टेपलेस वॉल्यूम नियंत्रण सक्षम करें।</string>
+
+    <string name="pref_super_volume">सुपर वॉल्यूम बूस्ट</string>
+    <string name="pref_super_volume_desc">अधिकतम वॉल्यूम बढ़ाएं।</string>
+
+    <string name="pref_palm_touch_sleep">पाम टच स्लीप</string>
+    <string name="pref_palm_touch_sleep_desc">स्क्रीन को अपनी हथेली से ढककर बंद करें। केवल लॉक स्क्रीन पर काम करता है।</string>
+
+    <string name="pref_flip_to_record">रिकॉर्ड करने के लिए पलटें</string>
+    <string name="pref_flip_to_record_desc">वॉयस रिकॉर्डिंग शुरू करने के लिए फोन को पलटें। रिकॉर्डिंग शुरू करने के लिए Essential कुंजी को दबाए रखें।</string>
+
+    <!-- AI & Misc -->
+    <string name="cat_ai_misc">AI और अन्य</string>
+    
+    <string name="pref_ai_clipboard_gemini">Gemini AI क्लिपबोर्ड चिप</string>
+    <string name="pref_ai_clipboard_gemini_desc">ChatGPT क्लिपबोर्ड AI सुविधा को Gemini के साथ काम करने के लिए बाध्य करता है।</string>
+    
+    <string name="pref_temp_warning_bypass">तापमान चेतावनियां अक्षम करें</string>
+    <string name="pref_temp_warning_bypass_desc">सिस्टम से उच्च-तापमान चेतावनी पॉपअप अक्षम करता है।</string>
+    
+    <string name="restart_txt">पुनरारंभ करें</string>
+</resources>

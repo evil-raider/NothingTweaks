@@ -27,6 +27,9 @@
     <string name="title_scramble_pin">PIN Tuşlarını Karıştır</string>
     <string name="summary_scramble_pin">PIN tuş takımındaki rakamların konumunu rastgele hale getirir.</string>
 
+    <string name="title_hide_lockscreen_clock">Saati Gizle</string>
+    <string name="summary_hide_lockscreen_clock">Kilit ekranından saati gizle. Derinlik efektli duvar kağıtları için üçüncü taraf uygulamaları kullanırken kullanışlıdır.</string>
+
     <!-- Navigation -->
     <string name="cat_navigation">Gezinme</string>
 
@@ -40,13 +43,13 @@
     <string name="pref_back_gesture_kill_summary">Geri kaydırma hareketini basılı tutup bırakarak ön plandaki uygulamayı zorla durdurun.</string>
 
     <!-- Status bar -->
-    <string name="cat_statusbar">Durum çubuğu</string>
+    <string name="cat_statusbar">Durum Çubuğu</string>
 
     <string name="pref_force_earphone_icon">Tüm kulaklıklar için kulaklık simgesi</string>
     <string name="pref_force_earphone_icon_desc">Herhangi bir ses cihazı bağlandığında genel Bluetooth simgesi yerine Nothing kulaklık simgesini gösterir.</string>
 
     <!-- Status bar clock -->
-    <string name="cat_clock">Durum çubuğu saati</string>
+    <string name="cat_clock">Durum Çubuğu saati</string>
 
     <string name="pref_clock_seconds">Saniyeleri göster</string>
     <string name="pref_clock_seconds_desc">Her saniye ilerler.</string>
@@ -67,7 +70,7 @@
     <string name="cat_capture">Ekran Görüntüleri &amp; Ekran Kaydı</string>
 
     <string name="pref_watermark">Ekran görüntülerine seri numarası ekle</string>
-    <string name="pref_watermark_desc">Varsayılan olarak kapalıdır. Açıldığında her ekran görüntüsünün üzerine \"SN:\" + cihaz seri numaranızı çizer.</string>
+    <string name="pref_watermark_desc">Varsayılan olarak kapalıdır. Açıldığında her ekran görüntüsünün üzerine "SN:" + cihaz seri numaranızı çizer.</string>
 
     <string name="pref_record_limit">Ekran Kaydı Kalitesi</string>
     <string name="pref_record_limit_desc">ScreenMediaRecorder içinde çözünürlük veya kare hızı sınırlaması uygular. Kapalıyken varsayılan davranış değişmez.</string>
@@ -113,5 +116,4 @@
     <string name="pref_temp_warning_bypass_desc">Sistemin yüksek sıcaklık uyarı açılır pencerelerini devre dışı bırakır.</string>
     
     <string name="restart_txt">Yeniden Başlat</string>
-
 </resources>

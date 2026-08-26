@@ -1,0 +1,119 @@
+<resources>
+    <!-- App & Status -->
+    <string name="app_name">Nothing Tweaks</string>
+    <string name="status_active">Modul aktiv</string>
+    <string name="status_inactive">Modul nicht aktiv</string>
+    <string name="status_active_desc">Hooks wurden erfolgreich geladen.</string>
+    <string name="status_inactive_desc">Aktiviere Nothing Tweaks in LSPosed, wähle die Ziel-Apps aus und starte dann neu.</string>
+
+    <!-- System -->
+    <string name="category_system">System</string>
+    
+    <string name="title_allow_180_rotation">180°-Drehung zulassen</string>
+    <string name="summary_allow_180_rotation">Erlaube es, den Bildschirm komplett auf den Kopf zu drehen.</string>
+    
+    <string name="pref_advanced_power_menu_title">Erweitertes Power-Menü</string>
+    <string name="pref_advanced_power_menu_summary">Zeige Optionen zum Neustart in Recovery und Bootloader im Power-Menü.</string>
+
+    <!-- Lockscreen -->
+    <string name="cat_lockscreen">Sperrbildschirm</string>
+
+    <string name="pref_power_off_verify">Ausschaltbestätigung überspringen</string>
+    <string name="pref_power_off_verify_desc">Fordere keine Zugangsdaten an, um das Gerät vom Sperrbildschirm aus auszuschalten.</string>
+
+    <string name="pref_glimpse_ads">Glimpse-Werbehintergrund entfernen</string>
+    <string name="pref_glimpse_ads_desc">Deaktiviere das gesponserte Magazin-Hintergrundbild auf dem Sperrbildschirm.</string>
+
+    <string name="title_scramble_pin">PIN mischen</string>
+    <string name="summary_scramble_pin">Zufällige Anordnung der Zahlen auf dem PIN-Tastenfeld.</string>
+
+    <string name="title_hide_lockscreen_clock">Uhr ausblenden</string>
+    <string name="summary_hide_lockscreen_clock">Verstecke die Uhr auf dem Sperrbildschirm. Nützlich bei Verwendung von Drittanbieter-Apps für Tiefeneffekt-Hintergrundbilder.</string>
+
+    <!-- Navigation -->
+    <string name="cat_navigation">Navigation</string>
+
+    <string name="pref_transparent_nav_bar">Navigationsleiste ausblenden (mit Circle to Search)</string>
+    <string name="pref_transparent_nav_bar_desc">Macht die Navigationsleiste unsichtbar, behält aber die volle Funktionalität für Gesten und Circle to Search.\n\nHINWEIS: Du MUSST zuerst die Navigationsleiste in den Systemeinstellungen aktivieren und sicherstellen, dass Circle to Search eingeschaltet ist. Aktiviere dies erst danach, um die Leiste zu verstecken!</string>
+
+    <string name="title_hide_ime_bar">Tastaturplatz ausblenden</string>
+    <string name="summary_hide_ime_bar">Entfernt den leeren Platz unter der Tastatur und versteckt die Navigationsleiste beim Tippen</string>
+
+    <string name="pref_back_gesture_kill_title">Langes Wischen zurück, um App zu beenden</string>
+    <string name="pref_back_gesture_kill_summary">Halte die Zurück-Wischgeste und lasse sie dann los, um die Vordergrund-App sofort zu beenden.</string>
+
+    <!-- Status bar -->
+    <string name="cat_statusbar">Statusleiste</string>
+
+    <string name="pref_force_earphone_icon">Kopfhörer-Symbol für alle Headsets</string>
+    <string name="pref_force_earphone_icon_desc">Zeigt das Nothing-Kopfhörersymbol anstelle des generischen Bluetooth-Symbols an, wenn ein beliebiges Audiogerät verbunden ist.</string>
+
+    <!-- Status bar clock -->
+    <string name="cat_clock">Uhr in der Statusleiste</string>
+
+    <string name="pref_clock_seconds">Sekunden anzeigen</string>
+    <string name="pref_clock_seconds_desc">Tickt jede Sekunde.</string>
+
+    <string name="pref_clock_dow">Wochentag anzeigen</string>
+    <string name="pref_clock_dow_desc">Setzt den kurzen Wochentag davor, z. B. Mo 10:10.</string>
+
+    <string name="pref_clock_text">Eigener Text</string>
+    <string name="pref_clock_text_desc">Eigener Text nach der Uhrzeit. Leer lassen für keinen Text. Max. 24 Zeichen.</string>
+
+    <!-- Volume -->
+    <string name="cat_volume">Lautstärke</string>
+
+    <string name="pref_volume_timeout">Timeout des Lautstärkepanels</string>
+    <string name="pref_volume_timeout_desc">Millisekunden, bis das Lautstärkepanel ausgeblendet wird. Leer lassen für Standard (3000 ms).</string>
+
+    <!-- Screenshots & recording -->
+    <string name="cat_capture">Screenshots &amp; Bildschirmaufnahme</string>
+
+    <string name="pref_watermark">Seriennummer zu Screenshots hinzufügen</string>
+    <string name="pref_watermark_desc">Standardmäßig deaktiviert. Wenn aktiviert, wird \"SN:\" + Ihre Geräteseriennummer auf jeden Screenshot gezeichnet.</string>
+
+    <string name="pref_record_limit">Qualität der Bildschirmaufnahme</string>
+    <string name="pref_record_limit_desc">Erzwingt eine Auflösungs- oder Bildratenbegrenzung im ScreenMediaRecorder. Deaktiviert belässt das Standardverhalten unangetastet.</string>
+    
+    <string name="record_limit_off">Aus — Standard beibehalten</string>
+    <string name="record_limit_720p">720p</string>
+    <string name="record_limit_60fps_1080p">1080p / 60fps</string>
+
+    <!-- Fingerprint -->
+    <string name="cat_fingerprint">Fingerabdruck</string>
+
+    <string name="pref_fp_enabled">Scan-Punkte einfärben</string>
+    <string name="pref_fp_enabled_desc">Ändert die Farbe der animierten Punkte, die um Ihren Finger erscheinen, während der Sensor ihn liest.</string>
+
+    <string name="pref_fp_random">Zufällige Farbe bei jedem Tippen</string>
+    <string name="pref_fp_random_desc">Eine neue Farbe bei jedem Berühren des Sensors. Schalte dies aus, um unten eine eigene Farbe auszuwählen.</string>
+
+    <string name="pref_fp_color">Eigene Farbe</string>
+    <string name="pref_fp_color_desc">Wird verwendet, wenn Zufall ausgeschaltet ist.</string>
+
+    <!-- Device Features -->
+    <string name="cat_features">Gerätefunktionen</string>
+
+    <string name="pref_stepless_volume">Stufenlose Lautstärke</string>
+    <string name="pref_stepless_volume_desc">Aktiviert eine reibungslose stufenlose Lautstärkeregelung.</string>
+
+    <string name="pref_super_volume">Super-Lautstärke-Boost</string>
+    <string name="pref_super_volume_desc">Ermöglicht eine höhere maximale Lautstärke.</string>
+
+    <string name="pref_palm_touch_sleep">Handballenberührung zum Sperren</string>
+    <string name="pref_palm_touch_sleep_desc">Schalten Sie den Bildschirm aus, indem Sie ihn mit Ihrer Handfläche abdecken. Funktioniert nur auf dem Sperrbildschirm.</string>
+
+    <string name="pref_flip_to_record">Umdrehen zur Aufnahme</string>
+    <string name="pref_flip_to_record_desc">Drehe das Telefon um, um die Sprachaufnahme zu starten. Halte die Essential-Taste gedrückt, um die Aufnahme zu starten.</string>
+
+    <!-- AI & Misc -->
+    <string name="cat_ai_misc">KI &amp; Sonstiges</string>
+    
+    <string name="pref_ai_clipboard_gemini">Gemini KI Zwischenablage-Chip</string>
+    <string name="pref_ai_clipboard_gemini_desc">Erzwingt, dass die ChatGPT-Zwischenablage-KI-Funktion mit Gemini funktioniert.</string>
+    
+    <string name="pref_temp_warning_bypass">Temperaturwarnungen deaktivieren</string>
+    <string name="pref_temp_warning_bypass_desc">Deaktiviert die System-Popups bei hohen Temperaturen.</string>
+    
+    <string name="restart_txt">Neustart</string>
+</resources>
