@@ -67,6 +67,48 @@ class LockScreenHooks : HookModule {
                 XposedBridge.log("$TAG   [LockScreen] FAILED to hook scramble pin: ${t.message}")
             }
         }
+
+        // Hide Lockscreen Clock and Date Panel
+        val keyguardRootViewClass = XposedHelpers.findClassIfExists("com.android.systemui.keyguard.ui.view.KeyguardRootView", lpparam.classLoader)
+        if (keyguardRootViewClass != null) {
+            try {
+                XposedBridge.hookAllConstructors(keyguardRootViewClass, object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val root = param.thisObject as android.view.ViewGroup
+                        root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                if (prefs.getBoolean("pref_hide_lockscreen_clock", false)) {
+                                    var changed = false
+                                    val hideId = { idName: String ->
+                                        val resId = root.context.resources.getIdentifier(idName, "id", "com.android.systemui")
+                                        if (resId != 0) {
+                                            val v = root.findViewById<android.view.View>(resId)
+                                            if (v != null && v.visibility != android.view.View.INVISIBLE) {
+                                                v.visibility = android.view.View.INVISIBLE
+                                                changed = true
+                                            }
+                                        }
+                                    }
+                                    
+                                    hideId("bc_smartspace_view")
+                                    hideId("keyguard_slice_view")
+                                    hideId("lockscreen_clock_view")
+                                    hideId("lockscreen_clock_view_large")
+                                    hideId("date_smartspace_view_large")
+                                    hideId("weather_smartspace_view_large")
+                                    hideId("weather_clock_view")
+                                    
+                                    if (changed) return false
+                                }
+                                return true
+                            }
+                        })
+                    }
+                })
+            } catch (t: Throwable) {
+                XposedBridge.log("$TAG   [LockScreen] FAILED to hook KeyguardRootView: ${t.message}")
+            }
+        }
     }
 
     private fun hookBool(
