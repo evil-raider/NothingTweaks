@@ -1,0 +1,3 @@
+-keep class com.souleven.nothingos.** { *; }
+-dontwarn de.robv.android.xposed.**
+-keep class de.robv.android.xposed.** { *; }

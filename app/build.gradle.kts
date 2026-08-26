@@ -14,21 +14,20 @@ android {
         targetSdk = 37
         versionCode = 21
         versionName = "2.1"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resConfigs("en", "tr", "es", "ru", "de", "hi", "ja", "zh")
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            optimization {
-                enable = false
-            }
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
             isMinifyEnabled = true
             isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     compileOptions {
