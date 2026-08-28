@@ -129,6 +129,13 @@
         app:iconSpaceReserved="false">
 
         <SwitchPreferenceCompat
+            app:key="pref_reduce_edge_padding"
+            app:title="@string/pref_reduce_edge_padding_title"
+            app:summary="@string/pref_reduce_edge_padding_summary"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
             app:key="force_earphone_icon"
             app:title="@string/pref_force_earphone_icon"
             app:summary="@string/pref_force_earphone_icon_desc"
