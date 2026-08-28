@@ -48,6 +48,9 @@
     <string name="pref_force_earphone_icon">Earphone icon for all headphones</string>
     <string name="pref_force_earphone_icon_desc">Shows the Nothing earbud icon instead of the generic Bluetooth icon whenever any audio device is connected.</string>
 
+    <string name="pref_max_notif_icons_title">Notification Icon Limit</string>
+    <string name="pref_max_notif_icons_summary">Maximum number of notification icons to show in the status bar and AOD. Leave blank for default.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Status bar clock</string>
 
