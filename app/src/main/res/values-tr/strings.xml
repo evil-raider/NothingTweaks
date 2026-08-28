@@ -48,6 +48,12 @@
     <string name="pref_force_earphone_icon">Tüm kulaklıklar için kulaklık simgesi</string>
     <string name="pref_force_earphone_icon_desc">Herhangi bir ses cihazı bağlandığında genel Bluetooth simgesi yerine Nothing kulaklık simgesini gösterir.</string>
 
+    <string name="pref_max_notif_icons_title">Bildirim Simgesi Sınırı</string>
+    <string name="pref_max_notif_icons_summary">Durum çubuğunda ve AOD\'de gösterilecek maksimum bildirim simgesi sayısı. Varsayılan için boş bırakın.</string>
+
+    <string name="pref_reduce_edge_padding_title">Kenar Boşluğunu Azalt</string>
+    <string name="pref_reduce_edge_padding_summary">Durum çubuğunun sol ve sağ kenarlarındaki boş alanı azaltır.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Durum Çubuğu saati</string>
 

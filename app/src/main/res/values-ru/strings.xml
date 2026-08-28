@@ -48,6 +48,12 @@
     <string name="pref_force_earphone_icon">Значок наушников для всех гарнитур</string>
     <string name="pref_force_earphone_icon_desc">Отображать значок наушников Nothing вместо обычного значка Bluetooth при подключении любого аудиоустройства.</string>
 
+    <string name="pref_max_notif_icons_title">Лимит значков уведомлений</string>
+    <string name="pref_max_notif_icons_summary">Максимальное количество значков уведомлений для отображения в строке состояния и AOD. Оставьте пустым для значения по умолчанию.</string>
+
+    <string name="pref_reduce_edge_padding_title">Уменьшить отступы по краям</string>
+    <string name="pref_reduce_edge_padding_summary">Уменьшает пустое пространство по левому и правому краям строки состояния.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Часы в строке состояния</string>
 

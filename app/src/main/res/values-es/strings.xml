@@ -48,6 +48,12 @@
     <string name="pref_force_earphone_icon">Icono de auriculares para todos los auriculares</string>
     <string name="pref_force_earphone_icon_desc">Muestra el icono de auriculares Nothing en lugar del icono genérico de Bluetooth cada vez que se conecta cualquier dispositivo de audio.</string>
 
+    <string name="pref_max_notif_icons_title">Límite de iconos de notificación</string>
+    <string name="pref_max_notif_icons_summary">Número máximo de iconos de notificación para mostrar en la barra de estado y AOD. Déjalo en blanco para el predeterminado.</string>
+
+    <string name="pref_reduce_edge_padding_title">Reducir margen de los bordes</string>
+    <string name="pref_reduce_edge_padding_summary">Reduce el espacio vacío en los bordes izquierdo y derecho de la barra de estado.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Reloj de barra de estado</string>
 

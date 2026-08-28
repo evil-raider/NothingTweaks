@@ -48,6 +48,12 @@
     <string name="pref_force_earphone_icon">Kopfhörer-Symbol für alle Headsets</string>
     <string name="pref_force_earphone_icon_desc">Zeigt das Nothing-Kopfhörersymbol anstelle des generischen Bluetooth-Symbols an, wenn ein beliebiges Audiogerät verbunden ist.</string>
 
+    <string name="pref_max_notif_icons_title">Limit für Benachrichtigungssymbole</string>
+    <string name="pref_max_notif_icons_summary">Maximale Anzahl an Benachrichtigungssymbolen in der Statusleiste und auf dem AOD. Leer lassen für Standard.</string>
+
+    <string name="pref_reduce_edge_padding_title">Randabstand reduzieren</string>
+    <string name="pref_reduce_edge_padding_summary">Reduziert den leeren Platz am linken und rechten Rand der Statusleiste.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Uhr in der Statusleiste</string>
 

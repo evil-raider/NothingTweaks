@@ -48,6 +48,12 @@
     <string name="pref_force_earphone_icon">सभी हेडफ़ोन के लिए इयरफ़ोन आइकन</string>
     <string name="pref_force_earphone_icon_desc">कोई भी ऑडियो डिवाइस कनेक्ट होने पर सामान्य ब्लूटूथ आइकन के बजाय Nothing इयरबड आइकन दिखाता है।</string>
 
+    <string name="pref_max_notif_icons_title">नोटिफ़िकेशन आइकन की सीमा</string>
+    <string name="pref_max_notif_icons_summary">स्टेटस बार और AOD में दिखाने के लिए नोटिफ़िकेशन आइकन की अधिकतम संख्या। डिफ़ॉल्ट के लिए खाली छोड़ दें।</string>
+
+    <string name="pref_reduce_edge_padding_title">किनारे की पैडिंग कम करें</string>
+    <string name="pref_reduce_edge_padding_summary">स्टेटस बार के बाएँ और दाएँ किनारों पर खाली जगह को कम करता है।</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">स्टेटस बार घड़ी</string>
 
