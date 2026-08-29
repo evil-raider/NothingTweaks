@@ -3,6 +3,7 @@ package com.souleven.nothingos.hooks
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
+import android.view.ViewTreeObserver
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -12,11 +13,12 @@ class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
     private val DOT_ROOM_PX = 20
-    private val DOT_GAP_PX = 12          // зазор точки от края последней иконки; 0 = вплотную, меньше/отрицательное = ближе
+    private val DOT_GAP_PX = 12         // зазор точки от края последней иконки; меньше = ближе, отрицательное = ещё ближе
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
     private var dotLogCount = 0
+    private val pinnedContainers = java.util.WeakHashMap<View, Boolean>()
 
     private fun idName(v: View): String {
         return try {
@@ -119,9 +121,8 @@ class NotificationIconHooks : HookModule {
     }
 
     // Находит точку (STATE_DOT = 1) и ставит её вплотную за последней иконкой.
-    // Пишем и в IconState.xTranslation, и в саму view. Вызывается из нескольких
-    // хуков; побеждает тот, что отрабатывает последним перед отрисовкой.
-    private fun pinDot(container: ViewGroup, prefs: Prefs, tag: String) {
+    // Пишем и в IconState.xTranslation, и в саму view.
+    private fun pinDot(container: ViewGroup, prefs: Prefs, tag: String, log: Boolean) {
         val max = statusBarMax(prefs) ?: return
         val iconSize = iconSizeOf(container)
         val targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
@@ -144,11 +145,13 @@ class NotificationIconHooks : HookModule {
                     if (st != null) setFloatSafe(st, "xTranslation", targetX)
                 } catch (_: Throwable) {
                 }
-                try {
-                    child.translationX = targetX
-                } catch (_: Throwable) {
+                if (child.translationX != targetX) {
+                    try {
+                        child.translationX = targetX
+                    } catch (_: Throwable) {
+                    }
                 }
-                if (dotLogCount < 12) {
+                if (log && dotLogCount < 12) {
                     dotLogCount += 1
                     XposedBridge.log(
                         "NothingTweaks dot4[$tag]: targetX=${targetX.toInt()} " +
@@ -157,6 +160,25 @@ class NotificationIconHooks : HookModule {
                 }
                 return
             }
+        }
+    }
+
+    // Вешает пер-кадровый якорь: перед каждой отрисовкой возвращает точку на место,
+    // что бы её ни сдвинуло (аниматоры, перемешивание, включение экрана).
+    private fun ensurePreDraw(container: ViewGroup, prefs: Prefs) {
+        if (pinnedContainers.containsKey(container)) return
+        pinnedContainers[container] = true
+        try {
+            container.viewTreeObserver.addOnPreDrawListener(
+                ViewTreeObserver.OnPreDrawListener {
+                    try {
+                        pinDot(container, prefs, "draw", false)
+                    } catch (_: Throwable) {
+                    }
+                    true
+                }
+            )
+        } catch (_: Throwable) {
         }
     }
 
@@ -218,20 +240,20 @@ class NotificationIconHooks : HookModule {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
-                    pinDot(container, prefs, "calc")
+                    ensurePreDraw(container, prefs)
+                    pinDot(container, prefs, "calc", true)
                 }
             })
         } catch (_: Throwable) {
         }
 
-        // Ключевой хук: applyIconStates отрабатывает ПОСЛЕ расчёта и перезаписывает
-        // translationX. Пишем здесь последними, чтобы точка осталась на месте.
         try {
             XposedBridge.hookAllMethods(cls, "applyIconStates", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
-                    pinDot(container, prefs, "apply")
+                    ensurePreDraw(container, prefs)
+                    pinDot(container, prefs, "apply", true)
                 }
             })
         } catch (_: Throwable) {
