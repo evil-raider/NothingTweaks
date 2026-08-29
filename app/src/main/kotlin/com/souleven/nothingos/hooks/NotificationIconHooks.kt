@@ -1,6 +1,5 @@
 package com.souleven.nothingos.hooks
 
-import android.view.View
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -12,42 +11,45 @@ class NotificationIconHooks : HookModule {
         val containerClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.phone.NotificationIconContainer", lpparam.classLoader)
         if (containerClass != null) {
 
+            // Hook 1 — setMaxIconsAmount (+ лог входящего значения от биндера)
             try {
                 XposedBridge.hookAllMethods(containerClass, "setMaxIconsAmount", object : XC_MethodHook() {
+                    private var last = 0L
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull()
-                        if (maxIcons != null) {
-                            param.args[0] = maxIcons
+                        val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull() ?: return
+                        val now = System.currentTimeMillis()
+                        if (now - last > 400) {
+                            last = now
+                            XposedBridge.log("NTX_SET incoming=${param.args[0]} override=$maxIcons")
                         }
+                        param.args[0] = maxIcons
                     }
                 })
             } catch (t: Throwable) {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook setMaxIconsAmount: ${t.message}")
             }
 
+            // Hook 2 — initResources (AOD/Lockscreen)
             try {
                 XposedBridge.hookAllMethods(containerClass, "initResources", object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull()
-                        if (maxIcons != null) {
-                            XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnAod", maxIcons)
-                            XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnLockscreen", maxIcons)
-                        }
+                        val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull() ?: return
+                        XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnAod", maxIcons)
+                        XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnLockscreen", maxIcons)
                     }
                 })
             } catch (t: Throwable) {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook initResources: ${t.message}")
             }
 
+            // Hook 3 — getIconLimit (путь Android 14+)
             try {
                 val dataClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData", lpparam.classLoader)
                 if (dataClass != null) {
                     XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
                         override fun beforeHookedMethod(param: MethodHookParam) {
-                            val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull()
-                            if (maxIcons != null) {
-                                param.result = maxIcons
-                            }
+                            val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull() ?: return
+                            param.result = maxIcons
                         }
                     })
                 }
@@ -55,35 +57,33 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: ${t.message}")
             }
 
-            // Исправленный фикс ширины + диагностика.
-            // Оригинальные левые часы (mClock, ребёнок status_bar_start_side_container)
-            // продолжают занимать ширину даже после того, как мод переноса (Iconify) визуально
-            // увёл их вправо — из-за этого ряд иконок сжимается, и подъём лимита даёт
-            // "4 иконки + точка". Схлопываем именно этот левый инстанс часов в GONE, но
-            // ТОЛЬКО если он уже скрыт (alpha 0 или не VISIBLE), чтобы реально видимые/
-            // перенесённые часы не пострадали. Лог NTX_DIAG показывает фактическое состояние.
+            // ДИАГНОСТИКА — реальная ширина/границы контейнера в момент раскладки иконок.
             try {
-                val contentExtClass = XposedHelpers.findClassIfExists("com.nothing.systemui.statusbar.widgets.NTStatusBarContentExt", lpparam.classLoader)
-                if (contentExtClass != null) {
-                    XposedBridge.hookAllMethods(contentExtClass, "onMeasure", object : XC_MethodHook() {
-                        private var diagCount = 0
-                        override fun beforeHookedMethod(param: MethodHookParam) {
-                            val maxIcons = prefs.getString("pref_max_notif_icons", "").toIntOrNull() ?: return
-                            val clock = XposedHelpers.getObjectField(param.thisObject, "mClock") as? View ?: return
-
-                            if (diagCount < 10) {
-                                diagCount++
-                                XposedBridge.log("NTX_DIAG clock cls=${clock.javaClass.name} vis=${clock.visibility} alpha=${clock.alpha} txX=${clock.translationX} mW=${clock.measuredWidth} w=${clock.width}")
-                            }
-
-                            if ((clock.alpha == 0f || clock.visibility != View.VISIBLE) && clock.visibility != View.GONE) {
-                                clock.visibility = View.GONE
-                            }
+                XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
+                    private var last = 0L
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val now = System.currentTimeMillis()
+                        if (now - last < 400) return
+                        last = now
+                        val v = param.thisObject
+                        try {
+                            val id = XposedHelpers.callMethod(v, "getId") as Int
+                            val cc = XposedHelpers.callMethod(v, "getChildCount") as Int
+                            val mMax = XposedHelpers.getIntField(v, "mMaxIcons")
+                            val w = XposedHelpers.callMethod(v, "getWidth") as Int
+                            val aw = XposedHelpers.callMethod(v, "getActualWidth") as Int
+                            val lb = XposedHelpers.callMethod(v, "getLeftBound") as Float
+                            val rb = XposedHelpers.callMethod(v, "getRightBound") as Float
+                            val iconSize = XposedHelpers.getIntField(v, "mIconSize")
+                            val dot = XposedHelpers.getBooleanField(v, "mIsShowingOverflowDot")
+                            XposedBridge.log("NTX_ICO id=$id cc=$cc mMax=$mMax w=$w aw=$aw L=$lb R=$rb iconSize=$iconSize dot=$dot")
+                        } catch (e: Throwable) {
+                            XposedBridge.log("NTX_ICO diag error: ${e.message}")
                         }
-                    })
-                }
+                    }
+                })
             } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook NTStatusBarContentExt.onMeasure: ${t.message}")
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook calculateIconXTranslations: ${t.message}")
             }
         }
     }
