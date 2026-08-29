@@ -7,8 +7,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 
 class NotificationIconHooks : HookModule {
 
-    // R.id.content на этой прошивке (контейнер иконок статус-бара). Резолвим по имени,
-    // с запасным числовым значением на случай другой сборки.
     private var statusBarContainerId = 0
 
     private fun statusBarId(view: Any): Int {
@@ -32,7 +30,7 @@ class NotificationIconHooks : HookModule {
             lpparam.classLoader
         ) ?: return
 
-        // Hook 1 — setMaxIconsAmount (влияет на запрашиваемую ширину и поле mMaxIcons)
+        // Hook 1 — setMaxIconsAmount -> pref
         try {
             XposedBridge.hookAllMethods(containerClass, "setMaxIconsAmount", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -41,10 +39,10 @@ class NotificationIconHooks : HookModule {
                 }
             })
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] setMaxIconsAmount hook failed: ${t.message}")
+            XposedBridge.log("NothingTweaks: setMaxIconsAmount hook failed: ${t.message}")
         }
 
-        // Hook 2 — initResources (лимиты AOD / Lockscreen — исходное поведение NothingTweaks)
+        // Hook 2 — initResources -> AOD/Lockscreen = pref (исходное поведение NothingTweaks)
         try {
             XposedBridge.hookAllMethods(containerClass, "initResources", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -54,10 +52,10 @@ class NotificationIconHooks : HookModule {
                 }
             })
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] initResources hook failed: ${t.message}")
+            XposedBridge.log("NothingTweaks: initResources hook failed: ${t.message}")
         }
 
-        // Hook 3 — getIconLimit (путь Android 14+, модерн-байндер)
+        // Hook 3 — getIconLimit -> pref
         try {
             val dataClass = XposedHelpers.findClassIfExists(
                 "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData",
@@ -72,10 +70,10 @@ class NotificationIconHooks : HookModule {
                 })
             }
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] getIconLimit hook failed: ${t.message}")
+            XposedBridge.log("NothingTweaks: getIconLimit hook failed: ${t.message}")
         }
 
-        // Hook 4 — санитайзер getActualWidth (страховка): 0 → реальная getWidth() (только статус-бар)
+        // Hook 4 — getActualWidth: 0 -> getWidth (страховка, только статус-бар)
         try {
             XposedBridge.hookAllMethods(containerClass, "getActualWidth", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -88,60 +86,52 @@ class NotificationIconHooks : HookModule {
                 }
             })
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] getActualWidth hook failed: ${t.message}")
+            XposedBridge.log("NothingTweaks: getActualWidth hook failed: ${t.message}")
         }
 
-        // Hook 5 — убираем ширинный обрез для статус-бара: переполнение решает ТОЛЬКО счётчик.
-        try {
-            XposedBridge.hookAllMethods(containerClass, "isOverflowing", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val v = param.thisObject
-                    if ((XposedHelpers.callMethod(v, "getId") as Int) != statusBarId(v)) return
-                    param.result = false
-                }
-            })
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] isOverflowing hook failed: ${t.message}")
-        }
-
-        // Hook 6 — жёсткий предел = число из настроек: в shouldForceOverflow подменяем лимит на pref
-        //          (4-й аргумент — maxIcons). Не зависит от тайминга mMaxIcons.
-        try {
-            XposedBridge.hookAllMethods(containerClass, "shouldForceOverflow", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val v = param.thisObject
-                    if ((XposedHelpers.callMethod(v, "getId") as Int) != statusBarId(v)) return
-                    val maxIcons = prefLimit(prefs) ?: return
-                    if (param.args.size >= 4) param.args[3] = maxIcons
-                }
-            })
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] shouldForceOverflow hook failed: ${t.message}")
-        }
-
-        // Hook 7 — ДИАГНОСТИКА (фильтр NTX_ICO). Убрать после подтверждения.
+        // Hook 5 — ДИАГНОСТИКА: реальные ширины иконок, X, hidden/visibleState, геометрия.
+        //          Фильтр: NTX_ICO
         try {
             XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
                 private var last = 0L
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    val now = System.currentTimeMillis()
-                    if (now - last < 500) return
-                    last = now
                     val v = param.thisObject
+                    val id = XposedHelpers.callMethod(v, "getId") as Int
+                    if (id != statusBarId(v)) return
+                    val now = System.currentTimeMillis()
+                    if (now - last < 700) return
+                    last = now
                     try {
-                        val id = XposedHelpers.callMethod(v, "getId") as Int
                         val cc = XposedHelpers.callMethod(v, "getChildCount") as Int
                         val mMax = XposedHelpers.getIntField(v, "mMaxIcons")
-                        val aw = XposedHelpers.callMethod(v, "getActualWidth") as Int
-                        val dot = XposedHelpers.getBooleanField(v, "mIsShowingOverflowDot")
-                        XposedBridge.log("NTX_ICO id=$id cc=$cc mMax=$mMax aw=$aw dot=$dot")
+                        val iconSize = XposedHelpers.getIntField(v, "mIconSize")
+                        val vos = XposedHelpers.getFloatField(v, "mVisualOverflowStart")
+                        val left = XposedHelpers.callMethod(v, "getLeftBound") as Float
+                        val right = XposedHelpers.callMethod(v, "getRightBound") as Float
+                        val states = XposedHelpers.getObjectField(v, "mIconStates") as java.util.HashMap<*, *>
+                        val n = if (cc < 10) cc else 10
+                        val sb = StringBuilder()
+                        for (i in 0 until n) {
+                            val child = XposedHelpers.callMethod(v, "getChildAt", i)
+                            val w = XposedHelpers.callMethod(child, "getWidth") as Int
+                            val st = states[child]
+                            var x = -1f; var hid = 0; var vis = -1; var app = -1f
+                            if (st != null) {
+                                x = XposedHelpers.callMethod(st, "getXTranslation") as Float
+                                hid = if (XposedHelpers.getBooleanField(st, "hidden")) 1 else 0
+                                vis = XposedHelpers.getIntField(st, "visibleState")
+                                app = XposedHelpers.getFloatField(st, "iconAppearAmount")
+                            }
+                            sb.append("#$i(w=$w,x=$x,h=$hid,vs=$vis,a=$app) ")
+                        }
+                        XposedBridge.log("NTX_ICO cc=$cc mMax=$mMax iconSize=$iconSize L=$left R=$right vos=$vos :: $sb")
                     } catch (e: Throwable) {
                         XposedBridge.log("NTX_ICO diag error: ${e.message}")
                     }
                 }
             })
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] diag hook failed: ${t.message}")
+            XposedBridge.log("NothingTweaks: diag hook failed: ${t.message}")
         }
     }
 }
