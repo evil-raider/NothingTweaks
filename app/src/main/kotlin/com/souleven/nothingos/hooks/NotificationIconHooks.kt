@@ -188,7 +188,7 @@ class NotificationIconHooks : HookModule {
                     setFloatSafe(container, "mActualPaddingEnd", 0f)
                 }
 
-                                override fun afterHookedMethod(param: MethodHookParam) {
+                override fun afterHookedMethod(param: MethodHookParam) {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
                     val max = statusBarMax(prefs) ?: return
@@ -214,15 +214,21 @@ class NotificationIconHooks : HookModule {
                         }
                     }
 
-                    val targetX = if (lastRight > 0f) lastRight + DOT_PADDING_PX
-                        else (max * iconSize + DOT_PADDING_PX).toFloat()
+                    val targetX = if (lastRight > 0f) {
+                        lastRight + DOT_PADDING_PX
+                    } else {
+                        (max * iconSize + DOT_PADDING_PX).toFloat()
+                    }
 
-                    if (dotChild != null) {
-                        val dc = dotChild
+                    val dc = dotChild
+                    if (dc != null) {
                         try {
                             val states = XposedHelpers.getObjectField(container, "mIconStates")
-                            val st = if (states != null)
-                                XposedHelpers.callMethod(states, "get", dc) else null
+                            val st = if (states != null) {
+                                XposedHelpers.callMethod(states, "get", dc)
+                            } else {
+                                null
+                            }
                             if (st != null) setFloatSafe(st, "xTranslation", targetX)
                         } catch (_: Throwable) {
                         }
@@ -236,7 +242,7 @@ class NotificationIconHooks : HookModule {
                         dotLogCount += 1
                         val sb = StringBuilder(
                             "dot2 max=$max cc=$n lastRight=${lastRight.toInt()} " +
-                                "target=${targetX.toInt()} dot=${dotChild != null}"
+                                "target=${targetX.toInt()} dot=${dc != null}"
                         )
                         for (i in 0 until n) {
                             val c = container.getChildAt(i) ?: continue
@@ -252,7 +258,6 @@ class NotificationIconHooks : HookModule {
                         }
                         XposedBridge.log("NothingTweaks $sb")
                     }
-                }
                 }
             })
         } catch (_: Throwable) {
