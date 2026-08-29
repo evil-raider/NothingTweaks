@@ -188,21 +188,71 @@ class NotificationIconHooks : HookModule {
                     setFloatSafe(container, "mActualPaddingEnd", 0f)
                 }
 
-                override fun afterHookedMethod(param: MethodHookParam) {
+                                override fun afterHookedMethod(param: MethodHookParam) {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
                     val max = statusBarMax(prefs) ?: return
+                    val iconSize = iconSizeOf(container)
+                    val n = container.childCount
 
-                    if (dotLogCount < 15) {
-                        dotLogCount += 1
-                        val overflow = getFloatFieldSafe(container, "mVisualOverflowStart")
-                        val staticCount = getIntFieldSafe(container, "mMaxStaticIcons")
-                        XposedBridge.log(
-                            "NothingTweaks dot-pin: max=$max slots=${max + 1} " +
-                                "overflowStart=$overflow maxStatic=$staticCount " +
-                                "count=${container.childCount}"
-                        )
+                    // Правый край последней видимой иконки (STATE_ICON=0) и сама точка (STATE_DOT=1)
+                    var lastRight = 0f
+                    var dotChild: View? = null
+                    for (i in 0 until n) {
+                        val child = container.getChildAt(i) ?: continue
+                        val state = try {
+                            (XposedHelpers.callMethod(child, "getVisibleState") as? Int) ?: -1
+                        } catch (_: Throwable) {
+                            -1
+                        }
+                        when (state) {
+                            0 -> if (child.translationX >= 0f) {
+                                val right = child.translationX + child.width
+                                if (right > lastRight) lastRight = right
+                            }
+                            1 -> dotChild = child
+                        }
                     }
+
+                    val targetX = if (lastRight > 0f) lastRight + DOT_PADDING_PX
+                        else (max * iconSize + DOT_PADDING_PX).toFloat()
+
+                    if (dotChild != null) {
+                        val dc = dotChild
+                        try {
+                            val states = XposedHelpers.getObjectField(container, "mIconStates")
+                            val st = if (states != null)
+                                XposedHelpers.callMethod(states, "get", dc) else null
+                            if (st != null) setFloatSafe(st, "xTranslation", targetX)
+                        } catch (_: Throwable) {
+                        }
+                        try {
+                            dc.translationX = targetX
+                        } catch (_: Throwable) {
+                        }
+                    }
+
+                    if (dotLogCount < 20) {
+                        dotLogCount += 1
+                        val sb = StringBuilder(
+                            "dot2 max=$max cc=$n lastRight=${lastRight.toInt()} " +
+                                "target=${targetX.toInt()} dot=${dotChild != null}"
+                        )
+                        for (i in 0 until n) {
+                            val c = container.getChildAt(i) ?: continue
+                            val state = try {
+                                (XposedHelpers.callMethod(c, "getVisibleState") as? Int) ?: -1
+                            } catch (_: Throwable) {
+                                -1
+                            }
+                            sb.append(" |").append(i)
+                                .append(":x=").append(c.translationX.toInt())
+                                .append(",st=").append(state)
+                                .append(",a=").append((c.alpha * 100).toInt())
+                        }
+                        XposedBridge.log("NothingTweaks $sb")
+                    }
+                }
                 }
             })
         } catch (_: Throwable) {
