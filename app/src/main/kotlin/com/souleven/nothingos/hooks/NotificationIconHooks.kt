@@ -192,7 +192,7 @@ class NotificationIconHooks : HookModule {
                     if (container.childCount <= max) return
 
                     val iconSize = iconSizeOf(container)
-                    val dotStart = (max * iconSize + DOT_PADDING_PX).toFloat()
+                    val dotStart = (max * iconSize + DOT_PADDING_PX).toFloat() - (iconSize * 0.75f)
 
                     val beforeF = getFloatFieldSafe(container, "mVisualOverflowStart")
                     val beforeI = getIntFieldSafe(container, "mVisualOverflowStart")
