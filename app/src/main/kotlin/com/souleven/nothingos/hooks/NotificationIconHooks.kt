@@ -2,220 +2,258 @@ package com.souleven.nothingos.hooks
 
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewParent
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.io.FileWriter
+import java.io.PrintWriter
+import java.io.StringWriter
 
 class NotificationIconHooks : HookModule {
 
-    @Volatile private var lastLogTime = 0L
-    @Volatile private var cachedContentId = 0
+    @Volatile private var widthLogCount = 0
+    @Volatile private var xlateLogCount = 0
+
+    private fun writeLog(line: String) {
+        val paths = arrayOf("/sdcard/nothingtweaks_debug.txt", "/data/local/tmp/nothingtweaks_debug.txt")
+        var written = false
+        var pi = 0
+        while (pi < paths.size) {
+            if (!written) {
+                try {
+                    val writer = FileWriter(paths[pi], true)
+                    writer.write(line)
+                    writer.write("\n")
+                    writer.close()
+                    written = true
+                } catch (t: Throwable) {
+                }
+            }
+            pi = pi + 1
+        }
+        try {
+            XposedBridge.log("NothingTweaks: " + line)
+        } catch (t: Throwable) {
+        }
+    }
+
+    private fun stackTraceString(t: Throwable): String {
+        return try {
+            val sw = StringWriter()
+            val pw = PrintWriter(sw)
+            t.printStackTrace(pw)
+            sw.toString()
+        } catch (t2: Throwable) {
+            "no-stacktrace"
+        }
+    }
+
+    private fun safeResName(view: View): String {
+        return try {
+            if (view.id != View.NO_ID) view.resources.getResourceEntryName(view.id) else "no-id"
+        } catch (t: Throwable) {
+            "res-error"
+        }
+    }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam, prefs: Prefs) {
-        val containerClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.phone.NotificationIconContainer", lpparam.classLoader)
-        if (containerClass != null) {
+        writeLog("=== handleLoadPackage ENTERED pkg=" + lpparam.packageName + " time=" + System.currentTimeMillis() + " ===")
 
-            fun isStatusBarContainer(view: Any): Boolean {
-                return try {
-                    if (view.javaClass != containerClass) {
-                        false
-                    } else {
-                        val v = view as View
-                        if (cachedContentId == 0) {
-                            cachedContentId = v.resources.getIdentifier("content", "id", lpparam.packageName)
-                        }
-                        cachedContentId != 0 && v.id == cachedContentId
+        try {
+            val candidateNames = arrayOf(
+                "com.android.systemui.statusbar.phone.NotificationIconContainer",
+                "com.android.systemui.statusbar.notification.NotificationIconContainer",
+                "com.android.systemui.statusbar.notification.icon.NotificationIconContainer"
+            )
+
+            var containerClass: Class<*>? = null
+            var foundName = "none"
+            var i = 0
+            while (i < candidateNames.size) {
+                val name = candidateNames[i]
+                var found: Class<*>? = null
+                try {
+                    found = XposedHelpers.findClassIfExists(name, lpparam.classLoader)
+                } catch (t: Throwable) {
+                    writeLog("Error checking class " + name + ": " + stackTraceString(t))
+                }
+                writeLog("Candidate class " + name + " found=" + (found != null))
+                if (found != null && containerClass == null) {
+                    containerClass = found
+                    foundName = name
+                }
+                i = i + 1
+            }
+
+            if (containerClass == null) {
+                writeLog("RESULT: NotificationIconContainer NOT FOUND under any candidate name. No icon hooks installed.")
+            } else {
+                val cls = containerClass!!
+                writeLog("RESULT: using container class " + foundName)
+
+                try {
+                    val methods = cls.declaredMethods
+                    writeLog("Declared method count: " + methods.size)
+                    var mi = 0
+                    while (mi < methods.size) {
+                        val m = methods[mi]
+                        writeLog("  METHOD " + mi + ": " + m.name + " paramCount=" + m.parameterTypes.size + " returns=" + m.returnType.simpleName)
+                        mi = mi + 1
                     }
                 } catch (t: Throwable) {
-                    false
+                    writeLog("Failed listing methods: " + stackTraceString(t))
                 }
-            }
 
-            fun resNameOf(view: View): String {
-                return try {
-                    if (view.id != View.NO_ID) view.resources.getResourceEntryName(view.id) else "no-id"
+                try {
+                    val fields = cls.declaredFields
+                    writeLog("Declared field count: " + fields.size)
+                    var fi = 0
+                    while (fi < fields.size) {
+                        val f = fields[fi]
+                        writeLog("  FIELD " + fi + ": " + f.name + " type=" + f.type.simpleName)
+                        fi = fi + 1
+                    }
                 } catch (t: Throwable) {
-                    "no-id"
+                    writeLog("Failed listing fields: " + stackTraceString(t))
+                }
+
+                var superCls = cls.superclass
+                var depth = 0
+                while (superCls != null && depth < 5) {
+                    writeLog("Superclass[" + depth + "]: " + superCls!!.name)
+                    superCls = superCls!!.superclass
+                    depth = depth + 1
+                }
+
+                try {
+                    val unhooks1 = XposedBridge.hookAllMethods(cls, "setMaxIconsAmount", object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            writeLog("FIRED setMaxIconsAmount origArg0=" + param.args[0])
+                            val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
+                            val maxIcons = maxIconsStr.toIntOrNull()
+                            if (maxIcons != null) {
+                                param.args[0] = maxIcons
+                                writeLog("  overrode to " + maxIcons)
+                            }
+                        }
+                    })
+                    writeLog("Install setMaxIconsAmount -> unhooks=" + unhooks1.size)
+                } catch (t: Throwable) {
+                    writeLog("Install FAILED setMaxIconsAmount: " + stackTraceString(t))
+                }
+
+                try {
+                    val unhooks2 = XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            writeLog("FIRED initResources")
+                            val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
+                            val maxIcons = maxIconsStr.toIntOrNull()
+                            if (maxIcons != null) {
+                                try {
+                                    XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnAod", maxIcons)
+                                    XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnLockscreen", maxIcons)
+                                    writeLog("  set mMaxIconsOnAod/mMaxIconsOnLockscreen=" + maxIcons)
+                                } catch (t: Throwable) {
+                                    writeLog("  field set failed: " + stackTraceString(t))
+                                }
+                            }
+                        }
+                    })
+                    writeLog("Install initResources -> unhooks=" + unhooks2.size)
+                } catch (t: Throwable) {
+                    writeLog("Install FAILED initResources: " + stackTraceString(t))
+                }
+
+                try {
+                    val unhooks3 = XposedBridge.hookAllMethods(cls, "getActualWidth", object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            if (widthLogCount < 40) {
+                                widthLogCount = widthLogCount + 1
+                                val view = param.thisObject
+                                var line = "FIRED getActualWidth #" + widthLogCount + " result=" + param.result
+                                try {
+                                    val v = view as View
+                                    line = line + " class=" + v.javaClass.name + " id=" + safeResName(v) + " left=" + v.left + " right=" + v.right + " width=" + v.width
+                                } catch (t: Throwable) {
+                                    line = line + " (view cast failed: " + t.message + ")"
+                                }
+                                writeLog(line)
+
+                                val result = param.result
+                                if (result is Int && result == 0) {
+                                    try {
+                                        val realWidth = (view as View).width
+                                        if (realWidth > 0) {
+                                            param.result = realWidth
+                                            writeLog("  patched zero width -> " + realWidth)
+                                        }
+                                    } catch (t: Throwable) {
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    writeLog("Install getActualWidth -> unhooks=" + unhooks3.size)
+                } catch (t: Throwable) {
+                    writeLog("Install FAILED getActualWidth: " + stackTraceString(t))
+                }
+
+                try {
+                    val unhooks4 = XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            if (xlateLogCount < 40) {
+                                xlateLogCount = xlateLogCount + 1
+                                val view = param.thisObject
+                                var line = "FIRED calculateIconXTranslations #" + xlateLogCount
+                                try {
+                                    val v = view as ViewGroup
+                                    line = line + " class=" + v.javaClass.name + " id=" + safeResName(v) + " childCount=" + v.childCount + " left=" + v.left + " right=" + v.right + " width=" + v.width
+
+                                    val parentView = v.parent
+                                    if (parentView is View) {
+                                        line = line + " | parent=" + parentView.javaClass.name + " parentId=" + safeResName(parentView) + " parentWidth=" + parentView.width
+                                    }
+                                } catch (t: Throwable) {
+                                    line = line + " (inspect failed: " + t.message + ")"
+                                }
+                                writeLog(line)
+                            }
+                        }
+                    })
+                    writeLog("Install calculateIconXTranslations -> unhooks=" + unhooks4.size)
+                } catch (t: Throwable) {
+                    writeLog("Install FAILED calculateIconXTranslations: " + stackTraceString(t))
                 }
             }
-
-            try {
-                XposedBridge.hookAllMethods(containerClass, "setMaxIconsAmount", object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
-                        val maxIcons = maxIconsStr.toIntOrNull()
-                        if (maxIcons != null) {
-                            param.args[0] = maxIcons
-                        }
-                    }
-                })
-            } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook setMaxIconsAmount: " + t.message)
-            }
-
-            try {
-                XposedBridge.hookAllMethods(containerClass, "initResources", object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
-                        val maxIcons = maxIconsStr.toIntOrNull()
-                        if (maxIcons != null) {
-                            XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnAod", maxIcons)
-                            XposedHelpers.setIntField(param.thisObject, "mMaxIconsOnLockscreen", maxIcons)
-                        }
-                    }
-                })
-            } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook initResources: " + t.message)
-            }
-
-            try {
-                XposedBridge.hookAllMethods(containerClass, "getActualWidth", object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val view = param.thisObject
-                        if (!isStatusBarContainer(view)) return
-                        val result = param.result
-                        if (result is Int && result == 0) {
-                            val realWidth = (view as View).width
-                            if (realWidth > 0) {
-                                param.result = realWidth
-                            }
-                        }
-                    }
-                })
-            } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getActualWidth: " + t.message)
-            }
-
-            try {
-                XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val view = param.thisObject
-                        if (!isStatusBarContainer(view)) return
-                        val now = System.currentTimeMillis()
-                        if (now - lastLogTime < 1000) return
-                        lastLogTime = now
-
-                        try {
-                            val v = view as ViewGroup
-                            val cc = v.childCount
-                            val actualWidth = try {
-                                XposedHelpers.callMethod(v, "getActualWidth")
-                            } catch (t: Throwable) {
-                                null
-                            }
-
-                            val iconStatesRaw = try {
-                                XposedHelpers.getObjectField(v, "mIconStates")
-                            } catch (t: Throwable) {
-                                null
-                            }
-                            val iconStates = iconStatesRaw as? Map<*, *>
-
-                            val sbIcons = StringBuilder()
-                            sbIcons.append("cc=")
-                            sbIcons.append(cc)
-                            sbIcons.append(" actualWidth=")
-                            sbIcons.append(actualWidth)
-                            sbIcons.append(" L=")
-                            sbIcons.append(v.left)
-                            sbIcons.append(" R=")
-                            sbIcons.append(v.right)
-                            sbIcons.append(" :: ")
-
-                            if (iconStates != null) {
-                                var idx = 0
-                                for (entry in iconStates.entries) {
-                                    val state = entry.value
-                                    val vs = try {
-                                        XposedHelpers.getIntField(state, "visibleState")
-                                    } catch (t: Throwable) {
-                                        -1
-                                    }
-                                    val x = try {
-                                        XposedHelpers.getFloatField(state, "xTranslation")
-                                    } catch (t: Throwable) {
-                                        -1f
-                                    }
-                                    sbIcons.append("#")
-                                    sbIcons.append(idx)
-                                    sbIcons.append(" vs=")
-                                    sbIcons.append(vs)
-                                    sbIcons.append(" x=")
-                                    sbIcons.append(x)
-                                    sbIcons.append("; ")
-                                    idx++
-                                }
-                            }
-                            XposedBridge.log("NTX_ICO " + sbIcons.toString())
-
-                            val sbPar = StringBuilder()
-                            var currentParent: ViewParent? = v.parent
-                            var level = 0
-                            while (level < 7) {
-                                val p = currentParent as? View
-                                if (p == null) {
-                                    level = 7
-                                } else {
-                                    sbPar.append("L")
-                                    sbPar.append(level)
-                                    sbPar.append("[")
-                                    sbPar.append(resNameOf(p))
-                                    sbPar.append("/")
-                                    sbPar.append(p.javaClass.simpleName)
-                                    sbPar.append(" w=")
-                                    sbPar.append(p.width)
-                                    sbPar.append(" l=")
-                                    sbPar.append(p.left)
-                                    sbPar.append(" r=")
-                                    sbPar.append(p.right)
-                                    sbPar.append("] ")
-                                    currentParent = p.parent
-                                    level = level + 1
-                                }
-                            }
-                            XposedBridge.log("NTX_PAR " + sbPar.toString())
-
-                            val directParent = v.parent as? ViewGroup
-                            if (directParent != null) {
-                                val sbSib = StringBuilder()
-                                var i = 0
-                                while (i < directParent.childCount) {
-                                    val child = directParent.getChildAt(i)
-                                    sbSib.append(resNameOf(child))
-                                    sbSib.append("/")
-                                    sbSib.append(child.javaClass.simpleName)
-                                    sbSib.append(" ")
-                                    i = i + 1
-                                }
-                                XposedBridge.log("NTX_SIB " + sbSib.toString())
-                            }
-                        } catch (t: Throwable) {
-                            XposedBridge.log("NothingTweaks: [NotificationIconHooks] NTX log error: " + t.message)
-                        }
-                    }
-                })
-            } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook calculateIconXTranslations: " + t.message)
-            }
+        } catch (t: Throwable) {
+            writeLog("TOP LEVEL ERROR: " + stackTraceString(t))
         }
 
         try {
             val dataClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData", lpparam.classLoader)
+            writeLog("NotificationIconsViewData found=" + (dataClass != null))
             if (dataClass != null) {
-                XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
-                        val maxIcons = maxIconsStr.toIntOrNull()
-                        if (maxIcons != null) {
-                            param.result = maxIcons
+                try {
+                    val unhooks5 = XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            writeLog("FIRED getIconLimit")
+                            val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
+                            val maxIcons = maxIconsStr.toIntOrNull()
+                            if (maxIcons != null) {
+                                param.result = maxIcons
+                            }
                         }
-                    }
-                })
+                    })
+                    writeLog("Install getIconLimit -> unhooks=" + unhooks5.size)
+                } catch (t: Throwable) {
+                    writeLog("Install FAILED getIconLimit: " + stackTraceString(t))
+                }
             }
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: " + t.message)
+            writeLog("ERROR checking NotificationIconsViewData: " + stackTraceString(t))
         }
+
+        writeLog("=== handleLoadPackage FINISHED pkg=" + lpparam.packageName + " ===")
     }
 }
