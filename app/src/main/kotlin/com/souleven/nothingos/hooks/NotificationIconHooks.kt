@@ -11,9 +11,11 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
-    private val DOT_ROOM_PX = 14
+    private val DOT_ROOM_PX = 20
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
+
+    private var dotLogCount = 0
 
     private fun idName(v: View): String {
         return try {
@@ -60,6 +62,22 @@ class NotificationIconHooks : HookModule {
         try {
             XposedHelpers.setFloatField(target, field, value)
         } catch (_: Throwable) {
+        }
+    }
+
+    private fun getIntFieldSafe(target: Any, field: String): Int? {
+        return try {
+            XposedHelpers.getIntField(target, field)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun getFloatFieldSafe(target: Any, field: String): Float? {
+        return try {
+            XposedHelpers.getFloatField(target, field)
+        } catch (_: Throwable) {
+            null
         }
     }
 
@@ -171,32 +189,27 @@ class NotificationIconHooks : HookModule {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
                     val max = statusBarMax(prefs) ?: return
+                    if (container.childCount <= max) return
 
-                    try {
-                        val rows = ArrayList<String>()
-                        for (i in 0 until container.childCount) {
-                            val child = container.getChildAt(i) ?: continue
-                            rows.add(
-                                "#$i" +
-                                    " id=${idName(child)}" +
-                                    " class=${child.javaClass.name}" +
-                                    " visible=${child.visibility == View.VISIBLE}" +
-                                    " w=${child.width}" +
-                                    " x=${child.translationX}" +
-                                    " alpha=${child.alpha}" +
-                                    " tag=${child.tag}"
-                            )
-                        }
+                    val iconSize = iconSizeOf(container)
+                    val dotStart = (max * iconSize + DOT_PADDING_PX).toFloat()
+
+                    val beforeF = getFloatFieldSafe(container, "mVisualOverflowStart")
+                    val beforeI = getIntFieldSafe(container, "mVisualOverflowStart")
+
+                    setFloatSafe(container, "mVisualOverflowStart", dotStart)
+                    setIntSafe(container, "mVisualOverflowStart", dotStart.toInt())
+
+                    if (dotLogCount < 15) {
+                        dotLogCount += 1
                         XposedBridge.log(
-                            "NothingTweaks: notificationIcons after calculate; " +
-                                "max=$max, count=${container.childCount}; " +
-                                rows.joinToString(" | ")
-                        )
-                    } catch (t: Throwable) {
-                        XposedBridge.log(
-                            "NothingTweaks: notification-dot inspection failed: ${t.message}"
+                            "NothingTweaks dot-pin: max=$max iconSize=$iconSize " +
+                                "dotStart=$dotStart beforeF=$beforeF beforeI=$beforeI " +
+                                "count=${container.childCount}"
                         )
                     }
+
+                    container.invalidate()
                 }
             })
         } catch (_: Throwable) {
@@ -220,9 +233,7 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    val target = layoutWidth(view, max)
-                    val current = param.result as? Int ?: 0
-                    if (target > current) param.result = target
+                    param.result = layoutWidth(view, max)
                 }
             })
         } catch (_: Throwable) {
