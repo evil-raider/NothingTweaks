@@ -81,7 +81,7 @@ class NotificationIconHooks : HookModule {
             lpparam.classLoader
         ) ?: return
 
-        // (1) AOD/Lockscreen: как в оригинале до правок. Больше AOD ничем не трогаем.
+        // (1) AOD/Lockscreen: как в оригинале до правок — лимиты контейнера = N.
         try {
             XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -92,7 +92,23 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) {}
 
-        // (2) Статус-бар: N статичных иконок + ширина + точка (рабочий вариант из теста).
+        // (2) AOD (ViewModel Android 14+): третий хук из оригинала — он и давал AOD 7-8.
+        try {
+            val dataClass = XposedHelpers.findClassIfExists(
+                "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData",
+                lpparam.classLoader
+            )
+            if (dataClass != null) {
+                XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val max = readMaxIcons(prefs) ?: return
+                        param.result = max
+                    }
+                })
+            }
+        } catch (t: Throwable) {}
+
+        // (3) Статус-бар: N статичных иконок + ширина + точка (рабочий вариант из теста).
         try {
             XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -113,7 +129,7 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) {}
 
-        // (3) Привязочный запас — не даём ROM сбросить лимит.
+        // (4) Привязочный запас — не даём ROM сбросить лимит статус-бара.
         try {
             XposedBridge.hookAllMethods(cls, "setMaxIconsAmount", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -123,7 +139,7 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) {}
 
-        // (4) Переполнение видит расширенную ширину.
+        // (5) Переполнение статус-бара видит расширенную ширину.
         try {
             XposedBridge.hookAllMethods(cls, "getActualWidth", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
