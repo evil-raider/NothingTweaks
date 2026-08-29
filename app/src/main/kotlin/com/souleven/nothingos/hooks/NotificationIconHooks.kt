@@ -1,6 +1,5 @@
 package com.souleven.nothingos.hooks
 
-import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import de.robv.android.xposed.XC_MethodHook
@@ -10,18 +9,33 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 
 class NotificationIconHooks : HookModule {
 
+    @Volatile private var lastLogTime = 0L
+
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam, prefs: Prefs) {
         val containerClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.phone.NotificationIconContainer", lpparam.classLoader)
         if (containerClass != null) {
 
+            @Volatile var cachedContentId = 0
+
             fun isStatusBarContainer(view: Any): Boolean {
-                if (view.javaClass != containerClass) return false
                 return try {
-                    val id = XposedHelpers.callMethod(view, "getId") as Int
-                    val ctx = XposedHelpers.callMethod(view, "getContext") as Context
-                    val contentId = ctx.resources.getIdentifier("content", "id", ctx.packageName)
-                    id == contentId
-                } catch (e: Throwable) { false }
+                    if (view.javaClass != containerClass) return false
+                    val v = view as View
+                    if (cachedContentId == 0) {
+                        cachedContentId = v.resources.getIdentifier("content", "id", lpparam.packageName)
+                    }
+                    cachedContentId != 0 && v.id == cachedContentId
+                } catch (t: Throwable) {
+                    false
+                }
+            }
+
+            fun resNameOf(view: View): String {
+                return try {
+                    if (view.id != View.NO_ID) view.resources.getResourceEntryName(view.id) else "no-id"
+                } catch (t: Throwable) {
+                    "no-id"
+                }
             }
 
             try {
@@ -38,6 +52,7 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook setMaxIconsAmount: ${t.message}")
             }
 
+            // Hook initResources to override AOD and Lockscreen limit
             try {
                 XposedBridge.hookAllMethods(containerClass, "initResources", object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
@@ -53,102 +68,100 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook initResources: ${t.message}")
             }
 
-            // Hook 4 — getActualWidth()==0 -> реальная ширина. Только точный класс + id "content" (не Shelf, не AOD)
+            // Hook 4: getActualWidth sometimes reports 0 before layout settles on the real
+            // status-bar container; fall back to the container's real measured width.
             try {
                 XposedBridge.hookAllMethods(containerClass, "getActualWidth", object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val v = param.thisObject
-                        if (!isStatusBarContainer(v)) return
-                        val actual = param.result as? Int ?: return
-                        if (actual > 0) return
-                        val real = XposedHelpers.callMethod(v, "getWidth") as Int
-                        if (real > 0) param.result = real
+                        val view = param.thisObject
+                        if (!isStatusBarContainer(view)) return
+                        val result = param.result
+                        if (result is Int && result == 0) {
+                            val realWidth = (view as View).width
+                            if (realWidth > 0) {
+                                param.result = realWidth
+                            }
+                        }
                     }
                 })
             } catch (t: Throwable) {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getActualWidth: ${t.message}")
             }
 
-            // Hook 5 — диагностика NTX_PAR / NTX_SIB. Только точный класс + id "content"
+            // Hook 5: diagnostic-only. Logs per-icon states plus the parent chain / siblings of
+            // the REAL status-bar icon container so we can find what clips it to ~4 icons.
             try {
                 XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
-                    private var last = 0L
-
-                    private fun idName(view: Any): String = try {
-                        val id = XposedHelpers.callMethod(view, "getId") as Int
-                        if (id <= 0) "no-id"
-                        else {
-                            val ctx = XposedHelpers.callMethod(view, "getContext") as Context
-                            ctx.resources.getResourceEntryName(id)
-                        }
-                    } catch (e: Throwable) { "?" }
-
-                    private fun dump(tag: String, view: Any): String {
-                        val cn = view.javaClass.simpleName
-                        val w = XposedHelpers.callMethod(view, "getWidth")
-                        val l = XposedHelpers.callMethod(view, "getLeft")
-                        val r = XposedHelpers.callMethod(view, "getRight")
-                        val tx = XposedHelpers.callMethod(view, "getTranslationX")
-                        val vis = XposedHelpers.callMethod(view, "getVisibility")
-                        val clip = try { XposedHelpers.callMethod(view, "getClipBounds") } catch (e: Throwable) { null }
-                        val cc = try { (XposedHelpers.callMethod(view, "getClipChildren") as Boolean).toString() } catch (e: Throwable) { "-" }
-                        return "$tag[${idName(view)}/$cn w=$w l=$l r=$r tx=$tx vis=$vis clipCh=$cc clip=$clip]"
-                    }
-
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val v = param.thisObject
-                        if (!isStatusBarContainer(v)) return
+                        val view = param.thisObject
+                        if (!isStatusBarContainer(view)) return
                         val now = System.currentTimeMillis()
-                        if (now - last < 1000) return
-                        last = now
+                        if (now - lastLogTime < 1000) return
+                        lastLogTime = now
                         try {
-                            val sb = StringBuilder()
-                            var cur: Any? = v
-                            var lvl = 0
-                            while (cur != null && lvl < 7) {
-                                sb.append(dump("L$lvl", cur)).append("  ")
-                                val p = try { XposedHelpers.callMethod(cur, "getParent") } catch (e: Throwable) { null }
-                                if (p == null || p !is View) break
-                                cur = p
-                                lvl++
-                            }
-                            XposedBridge.log("NTX_PAR $sb")
+                            val v = view as ViewGroup
+                            val cc = v.childCount
+                            val actualWidth = try { XposedHelpers.callMethod(v, "getActualWidth") } catch (t: Throwable) { null }
 
-                            val parent = XposedHelpers.callMethod(v, "getParent")
-                            if (parent is ViewGroup) {
-                                val n = XposedHelpers.callMethod(parent, "getChildCount") as Int
-                                val sb2 = StringBuilder()
-                                for (i in 0 until n) {
-                                    val ch = XposedHelpers.callMethod(parent, "getChildAt", i)
-                                    sb2.append("${idName(ch)}/${ch.javaClass.simpleName}(l=${XposedHelpers.callMethod(ch, "getLeft")},r=${XposedHelpers.callMethod(ch, "getRight")},vis=${XposedHelpers.callMethod(ch, "getVisibility")}) ")
-                                }
-                                XposedBridge.log("NTX_SIB $sb2")
+                            @Suppress("UNCHECKED_CAST")
+                            val iconStates = try {
+                                XposedHelpers.getObjectField(v, "mIconStates") as? Map<Any, Any>
+                            } catch (t: Throwable) { null }
+
+                            val sbIcons = StringBuilder("cc=$cc actualWidth=$actualWidth L=${v.left} R=${v.right} :: ")
+                            iconStates?.entries?.forEachIndexed { idx, entry ->
+                                val state = entry.value
+                                val vs = try { XposedHelpers.getIntField(state, "visibleState") } catch (t: Throwable) { -1 }
+                                val x = try { XposedHelpers.getFloatField(state, "xTranslation") } catch (t: Throwable) { -1f }
+                                sbIcons.append("#$idx vs=$vs x=$x; ")
                             }
-                        } catch (e: Throwable) {
-                            XposedBridge.log("NTX_PAR diag error: ${e.message}")
+                            XposedBridge.log("NTX_ICO $sbIcons")
+
+                            var parent = v.parent
+                            var level = 0
+                            val sbPar = StringBuilder()
+                            while (parent is View && level < 7) {
+                                sbPar.append("L$level[${resNameOf(parent)}/${parent.javaClass.simpleName} w=${parent.width} l=${parent.left} r=${parent.right] ")
+                                parent = parent.parent
+                                level++
+                            }
+                            XposedBridge.log("NTX_PAR $sbPar")
+
+                            val directParent = v.parent
+                            if (directParent is ViewGroup) {
+                                val sbSib = StringBuilder()
+                                for (i in 0 until directParent.childCount) {
+                                    val child = directParent.getChildAt(i)
+                                    sbSib.append("${resNameOf(child)}/${child.javaClass.simpleName} ")
+                                }
+                                XposedBridge.log("NTX_SIB $sbSib")
+                            }
+                        } catch (t: Throwable) {
+                            XposedBridge.log("NothingTweaks: [NotificationIconHooks] NTX log error: ${t.message}")
                         }
                     }
                 })
             } catch (t: Throwable) {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook calculateIconXTranslations: ${t.message}")
             }
+        }
 
-            try {
-                val dataClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData", lpparam.classLoader)
-                if (dataClass != null) {
-                    XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
-                        override fun beforeHookedMethod(param: MethodHookParam) {
-                            val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
-                            val maxIcons = maxIconsStr.toIntOrNull()
-                            if (maxIcons != null) {
-                                param.result = maxIcons
-                            }
+        // Hook getIconLimit in NotificationIconsViewData (Android 14+ ViewModel flow)
+        try {
+            val dataClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData", lpparam.classLoader)
+            if (dataClass != null) {
+                XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val maxIconsStr = prefs.getString("pref_max_notif_icons", "")
+                        val maxIcons = maxIconsStr.toIntOrNull()
+                        if (maxIcons != null) {
+                            param.result = maxIcons
                         }
-                    })
-                }
-            } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: ${t.message}")
+                    }
+                })
             }
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: ${t.message}")
         }
     }
 }
