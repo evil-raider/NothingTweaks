@@ -14,6 +14,16 @@ class NotificationIconHooks : HookModule {
         val containerClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.phone.NotificationIconContainer", lpparam.classLoader)
         if (containerClass != null) {
 
+            fun isStatusBarContainer(view: Any): Boolean {
+                if (view.javaClass != containerClass) return false
+                return try {
+                    val id = XposedHelpers.callMethod(view, "getId") as Int
+                    val ctx = XposedHelpers.callMethod(view, "getContext") as Context
+                    val contentId = ctx.resources.getIdentifier("content", "id", ctx.packageName)
+                    id == contentId
+                } catch (e: Throwable) { false }
+            }
+
             try {
                 XposedBridge.hookAllMethods(containerClass, "setMaxIconsAmount", object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
@@ -28,7 +38,6 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook setMaxIconsAmount: ${t.message}")
             }
 
-            // Hook initResources to override AOD and Lockscreen limit
             try {
                 XposedBridge.hookAllMethods(containerClass, "initResources", object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
@@ -44,13 +53,12 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook initResources: ${t.message}")
             }
 
-            // Hook 4 — getActualWidth()==0 on the status bar container -> use real getWidth()
+            // Hook 4 — getActualWidth()==0 -> реальная ширина. Только точный класс + id "content" (не Shelf, не AOD)
             try {
                 XposedBridge.hookAllMethods(containerClass, "getActualWidth", object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val v = param.thisObject
-                        val id = XposedHelpers.callMethod(v, "getId") as Int
-                        if (id != statusBarId(v)) return
+                        if (!isStatusBarContainer(v)) return
                         val actual = param.result as? Int ?: return
                         if (actual > 0) return
                         val real = XposedHelpers.callMethod(v, "getWidth") as Int
@@ -61,7 +69,7 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getActualWidth: ${t.message}")
             }
 
-            // Hook 5 — diagnostic: dump parent chain (NTX_PAR) and siblings (NTX_SIB) for the status bar container
+            // Hook 5 — диагностика NTX_PAR / NTX_SIB. Только точный класс + id "content"
             try {
                 XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
                     private var last = 0L
@@ -89,8 +97,7 @@ class NotificationIconHooks : HookModule {
 
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val v = param.thisObject
-                        val id = XposedHelpers.callMethod(v, "getId") as Int
-                        if (id != statusBarId(v)) return
+                        if (!isStatusBarContainer(v)) return
                         val now = System.currentTimeMillis()
                         if (now - last < 1000) return
                         last = now
@@ -126,7 +133,6 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook calculateIconXTranslations: ${t.message}")
             }
 
-            // Hook getIconLimit in NotificationIconsViewData (Android 14+ ViewModel flow)
             try {
                 val dataClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData", lpparam.classLoader)
                 if (dataClass != null) {
@@ -144,17 +150,5 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: ${t.message}")
             }
         }
-    }
-
-    private fun statusBarId(view: Any): Int {
-        return try {
-            val ctx = XposedHelpers.callMethod(view, "getContext") as Context
-            val id = ctx.resources.getIdentifier("content", "id", ctx.packageName)
-            if (id != 0) id else FALLBACK_STATUS_BAR_ID
-        } catch (e: Throwable) { FALLBACK_STATUS_BAR_ID }
-    }
-
-    private companion object {
-        const val FALLBACK_STATUS_BAR_ID = 2131362411
     }
 }
