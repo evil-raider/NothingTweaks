@@ -12,7 +12,7 @@ class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
     private val DOT_ROOM_PX = 20
-    private val DOT_GAP_PX = 6          // зазор точки от края последней иконки; 0 = вплотную, меньше/отрицательное = ближе
+    private val DOT_GAP_PX = 12          // зазор точки от края последней иконки; 0 = вплотную, меньше/отрицательное = ближе
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
