@@ -17,7 +17,12 @@ class NotificationIconHooks : HookModule {
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
+    private val STATE_ICON = 0
+    private val STATE_DOT = 1
+    private val STATE_HIDDEN = 2
+
     private var dotLogCount = 0
+    private var enforcing = false
     private val pinnedContainers = java.util.WeakHashMap<View, Boolean>()
 
     private fun idName(v: View): String {
@@ -120,59 +125,125 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    // Находит точку (STATE_DOT = 1) и ставит её вплотную за последней иконкой.
-    private fun pinDot(container: ViewGroup, prefs: Prefs, tag: String, log: Boolean) {
+    private fun visibleStateOf(child: View): Int {
+        return try {
+            (XposedHelpers.callMethod(child, "getVisibleState") as? Int) ?: -1
+        } catch (_: Throwable) {
+            -1
+        }
+    }
+
+    // Принудительно ставит состояние иконки (icon/dot/hidden) максимально надёжно.
+    private fun setChildState(container: ViewGroup, child: View, state: Int) {
+        var ok = false
+        try {
+            XposedHelpers.callMethod(child, "setVisibleState", state, false)
+            ok = true
+        } catch (_: Throwable) {
+        }
+        if (!ok) {
+            try {
+                XposedHelpers.callMethod(child, "setVisibleState", state)
+                ok = true
+            } catch (_: Throwable) {
+            }
+        }
+        if (!ok) {
+            try {
+                XposedHelpers.setIntField(child, "mVisibleState", state)
+            } catch (_: Throwable) {
+            }
+        }
+        try {
+            val states = XposedHelpers.getObjectField(container, "mIconStates")
+            val st = if (states != null) XposedHelpers.callMethod(states, "get", child) else null
+            if (st != null) setIntSafe(st, "visibleState", state)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun positionDot(container: ViewGroup, child: View, targetX: Float) {
+        try {
+            val states = XposedHelpers.getObjectField(container, "mIconStates")
+            val st = if (states != null) XposedHelpers.callMethod(states, "get", child) else null
+            if (st != null) setFloatSafe(st, "xTranslation", targetX)
+        } catch (_: Throwable) {
+        }
+        if (child.translationX != targetX) {
+            try {
+                child.translationX = targetX
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    // Держит видимыми не более max иконок: лишнюю превращает в точку, остальные прячет.
+    private fun enforceMax(container: ViewGroup, prefs: Prefs, tag: String, log: Boolean) {
+        if (enforcing) return
+        enforcing = true
+        try {
+            val max = statusBarMax(prefs) ?: return
+            val iconSize = iconSizeOf(container)
+            val targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
+            val n = container.childCount
+            var shown = 0
+            var dotChild: View? = null
+
+            for (i in 0 until n) {
+                val child = container.getChildAt(i) ?: continue
+                val vs = visibleStateOf(child)
+                when (vs) {
+                    STATE_ICON -> {
+                        if (shown < max) {
+                            shown += 1
+                        } else if (dotChild == null) {
+                            // (max+1)-я иконка становится точкой
+                            setChildState(container, child, STATE_DOT)
+                            dotChild = child
+                        } else {
+                            setChildState(container, child, STATE_HIDDEN)
+                        }
+                    }
+                    STATE_DOT -> {
+                        dotChild = child
+                    }
+                }
+            }
+
+            val dc = dotChild
+            if (dc != null) {
+                positionDot(container, dc, targetX)
+            }
+
+            if (log && dotLogCount < 12) {
+                dotLogCount += 1
+                val dotIdx = if (dc != null) container.indexOfChild(dc) else -1
+                val dotX = if (dc != null) dc.translationX.toInt() else -1
+                XposedBridge.log(
+                    "NothingTweaks dot5[$tag]: max=$max cc=$n visIcons=$shown " +
+                        "dotIdx=$dotIdx dotX=$dotX targetX=${targetX.toInt()}"
+                )
+            }
+        } finally {
+            enforcing = false
+        }
+    }
+
+    // Лёгкий пер-кадровый якорь: только держит точку на месте.
+    private fun holdDot(container: ViewGroup, prefs: Prefs) {
         val max = statusBarMax(prefs) ?: return
         val iconSize = iconSizeOf(container)
         val targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
         val n = container.childCount
         for (i in 0 until n) {
             val child = container.getChildAt(i) ?: continue
-            val state = try {
-                (XposedHelpers.callMethod(child, "getVisibleState") as? Int) ?: -1
-            } catch (_: Throwable) {
-                -1
-            }
-            if (state == 1) {
-                try {
-                    val states = XposedHelpers.getObjectField(container, "mIconStates")
-                    val st = if (states != null) {
-                        XposedHelpers.callMethod(states, "get", child)
-                    } else {
-                        null
-                    }
-                    if (st != null) setFloatSafe(st, "xTranslation", targetX)
-                } catch (_: Throwable) {
-                }
-                if (child.translationX != targetX) {
-                    try {
-                        child.translationX = targetX
-                    } catch (_: Throwable) {
-                    }
-                }
-                if (log && dotLogCount < 12) {
-                    dotLogCount += 1
-                    var visIcons = 0
-                    for (j in 0 until n) {
-                        val c = container.getChildAt(j) ?: continue
-                        val s = try {
-                            (XposedHelpers.callMethod(c, "getVisibleState") as? Int) ?: -1
-                        } catch (_: Throwable) {
-                            -1
-                        }
-                        if (s == 0 && c.alpha > 0.5f) visIcons += 1
-                    }
-                    XposedBridge.log(
-                        "NothingTweaks dot4[$tag]: targetX=${targetX.toInt()} " +
-                            "dotX=${child.translationX.toInt()} idx=$i cc=$n visIcons=$visIcons"
-                    )
-                }
+            if (visibleStateOf(child) == STATE_DOT) {
+                positionDot(container, child, targetX)
                 return
             }
         }
     }
 
-    // Пер-кадровый якорь: перед каждой отрисовкой возвращает точку на место.
     private fun ensurePreDraw(container: ViewGroup, prefs: Prefs) {
         if (pinnedContainers.containsKey(container)) return
         pinnedContainers[container] = true
@@ -180,7 +251,7 @@ class NotificationIconHooks : HookModule {
             container.viewTreeObserver.addOnPreDrawListener(
                 ViewTreeObserver.OnPreDrawListener {
                     try {
-                        pinDot(container, prefs, "draw", false)
+                        holdDot(container, prefs)
                     } catch (_: Throwable) {
                     }
                     true
@@ -233,16 +304,12 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    // maxStatic = max+1 задаёт потолок видимых иконок = max (одна из maxStatic
-                    // слотов резервируется под точку).
                     val slots = max + 1
                     setIntSafe(container, "mMaxStaticIcons", slots)
                     setIntSafe(container, "mMaxIcons", BIND_HEADROOM)
-                    // Родителей расширяем щедро, чтобы точку не срезало.
+                    // Щедрая ширина: пусть ROM разложит все иконки, лишнюю в точку превратим сами.
                     widenParents(view, fullWidth(view, slots))
-                    // А рабочую ширину сжимаем ровно под max иконок: тогда (max+1)-я иконка
-                    // не влезает и переполнение включается сразу при count > max.
-                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, max))
+                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, slots))
                     setIntSafe(container, "mDotPadding", DOT_PADDING_PX)
                     setFloatSafe(container, "mActualPaddingStart", 0f)
                     setFloatSafe(container, "mActualPaddingEnd", 0f)
@@ -252,7 +319,6 @@ class NotificationIconHooks : HookModule {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
                     ensurePreDraw(container, prefs)
-                    pinDot(container, prefs, "calc", true)
                 }
             })
         } catch (_: Throwable) {
@@ -264,7 +330,8 @@ class NotificationIconHooks : HookModule {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
                     ensurePreDraw(container, prefs)
-                    pinDot(container, prefs, "apply", true)
+                    // Ключевое: состояния уже применены к view, getVisibleState() актуален.
+                    enforceMax(container, prefs, "apply", true)
                 }
             })
         } catch (_: Throwable) {
@@ -288,8 +355,7 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    // Ширина ровно под max иконок → переполнение при count > max.
-                    param.result = layoutWidth(view, max)
+                    param.result = layoutWidth(view, max + 1)
                 }
             })
         } catch (_: Throwable) {
