@@ -121,7 +121,6 @@ class NotificationIconHooks : HookModule {
     }
 
     // Находит точку (STATE_DOT = 1) и ставит её вплотную за последней иконкой.
-    // Пишем и в IconState.xTranslation, и в саму view.
     private fun pinDot(container: ViewGroup, prefs: Prefs, tag: String, log: Boolean) {
         val max = statusBarMax(prefs) ?: return
         val iconSize = iconSizeOf(container)
@@ -153,9 +152,19 @@ class NotificationIconHooks : HookModule {
                 }
                 if (log && dotLogCount < 12) {
                     dotLogCount += 1
+                    var visIcons = 0
+                    for (j in 0 until n) {
+                        val c = container.getChildAt(j) ?: continue
+                        val s = try {
+                            (XposedHelpers.callMethod(c, "getVisibleState") as? Int) ?: -1
+                        } catch (_: Throwable) {
+                            -1
+                        }
+                        if (s == 0 && c.alpha > 0.5f) visIcons += 1
+                    }
                     XposedBridge.log(
                         "NothingTweaks dot4[$tag]: targetX=${targetX.toInt()} " +
-                            "dotX=${child.translationX.toInt()} idx=$i"
+                            "dotX=${child.translationX.toInt()} idx=$i cc=$n visIcons=$visIcons"
                     )
                 }
                 return
@@ -163,8 +172,7 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    // Вешает пер-кадровый якорь: перед каждой отрисовкой возвращает точку на место,
-    // что бы её ни сдвинуло (аниматоры, перемешивание, включение экрана).
+    // Пер-кадровый якорь: перед каждой отрисовкой возвращает точку на место.
     private fun ensurePreDraw(container: ViewGroup, prefs: Prefs) {
         if (pinnedContainers.containsKey(container)) return
         pinnedContainers[container] = true
@@ -225,13 +233,16 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    // ROM трактует mMaxStaticIcons как число слотов ВКЛЮЧАЯ слот под точку,
-                    // поэтому для N иконок + точка нужно N+1 слотов.
+                    // maxStatic = max+1 задаёт потолок видимых иконок = max (одна из maxStatic
+                    // слотов резервируется под точку).
                     val slots = max + 1
                     setIntSafe(container, "mMaxStaticIcons", slots)
                     setIntSafe(container, "mMaxIcons", BIND_HEADROOM)
+                    // Родителей расширяем щедро, чтобы точку не срезало.
                     widenParents(view, fullWidth(view, slots))
-                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, slots))
+                    // А рабочую ширину сжимаем ровно под max иконок: тогда (max+1)-я иконка
+                    // не влезает и переполнение включается сразу при count > max.
+                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, max))
                     setIntSafe(container, "mDotPadding", DOT_PADDING_PX)
                     setFloatSafe(container, "mActualPaddingStart", 0f)
                     setFloatSafe(container, "mActualPaddingEnd", 0f)
@@ -277,8 +288,8 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    // Ширина с запасом на N+1 слот, чтобы точку не срезало по краю.
-                    param.result = layoutWidth(view, max + 1)
+                    // Ширина ровно под max иконок → переполнение при count > max.
+                    param.result = layoutWidth(view, max)
                 }
             })
         } catch (_: Throwable) {
