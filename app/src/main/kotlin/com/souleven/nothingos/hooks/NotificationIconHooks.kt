@@ -1,241 +1,103 @@
 package com.souleven.nothingos.hooks
 
 import android.view.View
-import android.view.ViewGroup
-import android.view.ViewParent
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import java.io.FileWriter
-import java.io.StringWriter
-import java.io.PrintWriter
 
 class NotificationIconHooks : HookModule {
 
-    @Volatile private var logCount = 0
-    @Volatile private var truncated = false
+    // Зазор точки переполнения (px). 0 = вплотную к последней иконке.
+    private val DOT_PADDING_PX = 2
 
-    private fun writeLog(line: String) {
-        val append = truncated
-        truncated = true
-        val paths = arrayOf("/sdcard/nothingtweaks_debug.txt", "/data/local/tmp/nothingtweaks_debug.txt")
-        var written = false
-        var pi = 0
-        while (pi < paths.size) {
-            if (!written) {
-                try {
-                    val writer = FileWriter(paths[pi], append)
-                    writer.write(line)
-                    writer.write("\n")
-                    writer.close()
-                    written = true
-                } catch (t: Throwable) {
-                }
-            }
-            pi = pi + 1
-        }
-        try {
-            XposedBridge.log("NothingTweaks: " + line)
-        } catch (t: Throwable) {
-        }
-    }
-
-    private fun stackTraceString(t: Throwable): String {
+    private fun isStatusBarIcons(obj: Any?): Boolean {
+        if (obj !is View) return false
         return try {
-            val sw = StringWriter()
-            val pw = PrintWriter(sw)
-            t.printStackTrace(pw)
-            sw.toString()
-        } catch (t2: Throwable) {
-            "no-stacktrace"
-        }
-    }
-
-    private fun safeResName(view: View): String {
-        return try {
-            if (view.id != View.NO_ID) view.resources.getResourceEntryName(view.id) else "no-id"
+            val id = obj.id
+            if (id == View.NO_ID) false
+            else obj.resources.getResourceEntryName(id) == "notificationIcons"
         } catch (t: Throwable) {
-            "res-error"
+            false
         }
     }
 
-    private fun nthParentView(view: View, n: Int): View? {
-        var p: ViewParent? = view.parent
-        var i = 1
-        while (i < n) {
-            if (p == null) {
-                return null
-            }
-            p = p.parent
-            i = i + 1
-        }
-        if (p is View) {
-            return p as View
-        }
-        return null
+    private fun readMaxIcons(prefs: Prefs): Int? {
+        return prefs.getString("pref_max_notif_icons", "").toIntOrNull()
     }
 
     private fun setIntSafe(o: Any, name: String, value: Int) {
-        try {
-            XposedHelpers.setIntField(o, name, value)
-        } catch (t: Throwable) {
-        }
+        try { XposedHelpers.setIntField(o, name, value) } catch (t: Throwable) {}
     }
 
     private fun setFloatSafe(o: Any, name: String, value: Float) {
-        try {
-            XposedHelpers.setFloatField(o, name, value)
-        } catch (t: Throwable) {
-        }
-    }
-
-    private fun getIntSafe(o: Any, name: String): String {
-        return try {
-            "" + XposedHelpers.getIntField(o, name)
-        } catch (t: Throwable) {
-            "NA"
-        }
-    }
-
-    private fun getFloatSafe(o: Any, name: String): String {
-        return try {
-            "" + XposedHelpers.getFloatField(o, name)
-        } catch (t: Throwable) {
-            "NA"
-        }
-    }
-
-    private fun getBoolSafe(o: Any, name: String): String {
-        return try {
-            "" + XposedHelpers.getBooleanField(o, name)
-        } catch (t: Throwable) {
-            "NA"
-        }
-    }
-
-    private fun targetWidth(v: View): Int {
-        var screen = 1080
-        try {
-            screen = v.resources.displayMetrics.widthPixels
-        } catch (t: Throwable) {
-        }
-        return screen * 3 / 5
-    }
-
-    private fun widenContainer(v: View, target: Int) {
-        var level = 1
-        while (level <= 4) {
-            val p = nthParentView(v, level)
-            if (p != null) {
-                try {
-                    val lp = p.layoutParams
-                    if (lp != null && lp.width >= 0 && lp.width < target) {
-                        lp.width = target
-                        p.layoutParams = lp
-                    }
-                } catch (t: Throwable) {
-                }
-            }
-            level = level + 1
-        }
-    }
-
-    private fun logState(v: View, target: Int) {
-        val vg = v as ViewGroup
-        writeLog("STATE childCount=" + vg.childCount +
-            " width=" + v.width +
-            " maxStatic=" + getIntSafe(v, "mMaxStaticIcons") +
-            " maxIcons=" + getIntSafe(v, "mMaxIcons") +
-            " maxLock=" + getIntSafe(v, "mMaxIconsOnLockscreen") +
-            " actualLayoutW=" + getIntSafe(v, "mActualLayoutWidth") +
-            " padStart=" + getFloatSafe(v, "mActualPaddingStart") +
-            " padEnd=" + getFloatSafe(v, "mActualPaddingEnd") +
-            " staticLayout=" + getBoolSafe(v, "mIsStaticLayout") +
-            " onLock=" + getBoolSafe(v, "mOnLockScreen") +
-            " iconSize=" + getIntSafe(v, "mIconSize") +
-            " target=" + target)
+        try { XposedHelpers.setFloatField(o, name, value) } catch (t: Throwable) {}
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam, prefs: Prefs) {
-        writeLog("=== ENTERED pkg=" + lpparam.packageName + " time=" + System.currentTimeMillis() + " ===")
+        val containerClass = XposedHelpers.findClassIfExists(
+            "com.android.systemui.statusbar.phone.NotificationIconContainer",
+            lpparam.classLoader
+        )
+        if (containerClass != null) {
 
-        val cls = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.phone.NotificationIconContainer", lpparam.classLoader)
-        if (cls == null) {
-            writeLog("NotificationIconContainer NOT FOUND. Aborting this classloader.")
-            return
-        }
-        writeLog("Container class found.")
-
-        try {
-            XposedBridge.hookAllMethods(cls, "setMaxIconsAmount", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val v = param.thisObject
-                    if (v is View && safeResName(v) == "notificationIcons") {
-                        param.args[0] = 20
-                    }
-                }
-            })
-        } catch (t: Throwable) {
-            writeLog("hook setMaxIconsAmount failed: " + stackTraceString(t))
-        }
-
-        try {
-            XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val v = param.thisObject
-                    if (v is View && safeResName(v) == "notificationIcons") {
-                        setIntSafe(v, "mMaxStaticIcons", 20)
-                        setIntSafe(v, "mMaxIcons", 20)
-                        setIntSafe(v, "mMaxIconsOnLockscreen", 20)
-                        setIntSafe(v, "mMaxIconsOnAod", 20)
-                        setFloatSafe(v, "mActualPaddingStart", 0f)
-                        val target = targetWidth(v)
-                        widenContainer(v, target)
-                        setIntSafe(v, "mActualLayoutWidth", target)
-                        val vg = v as ViewGroup
-                        if (logCount < 25 && vg.childCount >= 4) {
-                            logCount = logCount + 1
-                            logState(v, target)
-                        }
-                    }
-                }
-            })
-        } catch (t: Throwable) {
-            writeLog("hook calculateIconXTranslations failed: " + stackTraceString(t))
-        }
-
-        try {
-            XposedBridge.hookAllMethods(cls, "getActualWidth", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val v = param.thisObject
-                    if (v is View && safeResName(v) == "notificationIcons") {
-                        val result = param.result
-                        val cur = if (result is Int) result else 0
-                        val target = targetWidth(v)
-                        if (target > cur) {
-                            param.result = target
-                        }
-                    }
-                }
-            })
-        } catch (t: Throwable) {
-            writeLog("hook getActualWidth failed: " + stackTraceString(t))
-        }
-
-        try {
-            val dataClass = XposedHelpers.findClassIfExists("com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData", lpparam.classLoader)
-            if (dataClass != null) {
-                XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
+            // (1) Лимит статус-бара = настройка. ТОЛЬКО notificationIcons.
+            try {
+                XposedBridge.hookAllMethods(containerClass, "setMaxIconsAmount", object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        param.result = 20
+                        if (!isStatusBarIcons(param.thisObject)) return
+                        val max = readMaxIcons(prefs) ?: return
+                        if (param.args.isNotEmpty()) param.args[0] = max
                     }
                 })
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] setMaxIconsAmount failed: ${t.message}")
             }
-        } catch (t: Throwable) {
-            writeLog("hook getIconLimit failed: " + stackTraceString(t))
-        }
 
-        writeLog("=== FINISHED pkg=" + lpparam.packageName + " ===")
+            // (2) На каждом пересчёте раскладки статус-бара: счётчик=N (точка
+            //     встаёт вплотную по логике AOSP), поджать точку, убрать
+            //     фантомный стартовый отступ от уехавших часов.
+            try {
+                XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val v = param.thisObject
+                        if (!isStatusBarIcons(v)) return
+                        val max = readMaxIcons(prefs)
+                        if (max != null) {
+                            setIntSafe(v, "mMaxStaticIcons", max)
+                            setIntSafe(v, "mMaxIcons", max)
+                        }
+                        setIntSafe(v, "mDotPadding", DOT_PADDING_PX)
+                        setFloatSafe(v, "mActualPaddingStart", 0f)
+                    }
+                })
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] calculateIconXTranslations failed: ${t.message}")
+            }
+
+            // (3) getIconLimit — сколько иконок ВООБЩЕ привязывать (Android 14+).
+            //     Оставляем глобально: AOD ограничен своим stock mMaxIconsOnAod
+            //     и покажет «N + точка», как в оригинале.
+            try {
+                val dataClass = XposedHelpers.findClassIfExists(
+                    "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData",
+                    lpparam.classLoader
+                )
+                if (dataClass != null) {
+                    XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val max = readMaxIcons(prefs) ?: return
+                            param.result = max
+                        }
+                    })
+                }
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] getIconLimit failed: ${t.message}")
+            }
+
+            // ВАЖНО: хук initResources, поднимавший mMaxIconsOnAod /
+            // mMaxIconsOnLockscreen, УБРАН НАМЕРЕННО — именно он ломал
+            // центрирование на AOD. Теперь AOD/локскрин = сток.
+        }
     }
 }
