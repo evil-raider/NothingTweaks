@@ -12,6 +12,7 @@ class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
     private val DOT_ROOM_PX = 20
+    private val DOT_GAP_PX = 6          // зазор глифа точки от края последней иконки; 0 = вплотную, меньше = ближе
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
@@ -62,22 +63,6 @@ class NotificationIconHooks : HookModule {
         try {
             XposedHelpers.setFloatField(target, field, value)
         } catch (_: Throwable) {
-        }
-    }
-
-    private fun getIntFieldSafe(target: Any, field: String): Int? {
-        return try {
-            XposedHelpers.getIntField(target, field)
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    private fun getFloatFieldSafe(target: Any, field: String): Float? {
-        return try {
-            XposedHelpers.getFloatField(target, field)
-        } catch (_: Throwable) {
-            null
         }
     }
 
@@ -195,8 +180,7 @@ class NotificationIconHooks : HookModule {
                     val iconSize = iconSizeOf(container)
                     val n = container.childCount
 
-                    // Правый край последней видимой иконки (STATE_ICON=0) и сама точка (STATE_DOT=1)
-                    var lastRight = 0f
+                    // Найти точку (STATE_DOT = 1)
                     var dotChild: View? = null
                     for (i in 0 until n) {
                         val child = container.getChildAt(i) ?: continue
@@ -205,58 +189,42 @@ class NotificationIconHooks : HookModule {
                         } catch (_: Throwable) {
                             -1
                         }
-                        when (state) {
-                            0 -> if (child.translationX >= 0f) {
-                                val right = child.translationX + child.width
-                                if (right > lastRight) lastRight = right
-                            }
-                            1 -> dotChild = child
+                        if (state == 1) {
+                            dotChild = child
+                            break
                         }
                     }
 
-                    val targetX = if (lastRight > 0f) {
-                        lastRight + DOT_PADDING_PX
-                    } else {
-                        (max * iconSize + DOT_PADDING_PX).toFloat()
+                    val dc = dotChild ?: return
+
+                    // Глиф точки рисуется по центру своей iconSize-view, из-за чего родной
+                    // код оставляет зазор ~iconSize/2. Тянем view влево на половину иконки,
+                    // чтобы глиф встал вплотную за последней иконкой.
+                    val lastIconRight = (max * iconSize).toFloat()
+                    val targetX = lastIconRight - iconSize / 2f + DOT_GAP_PX
+
+                    try {
+                        val states = XposedHelpers.getObjectField(container, "mIconStates")
+                        val st = if (states != null) {
+                            XposedHelpers.callMethod(states, "get", dc)
+                        } else {
+                            null
+                        }
+                        if (st != null) setFloatSafe(st, "xTranslation", targetX)
+                    } catch (_: Throwable) {
+                    }
+                    try {
+                        dc.translationX = targetX
+                    } catch (_: Throwable) {
                     }
 
-                    val dc = dotChild
-                    if (dc != null) {
-                        try {
-                            val states = XposedHelpers.getObjectField(container, "mIconStates")
-                            val st = if (states != null) {
-                                XposedHelpers.callMethod(states, "get", dc)
-                            } else {
-                                null
-                            }
-                            if (st != null) setFloatSafe(st, "xTranslation", targetX)
-                        } catch (_: Throwable) {
-                        }
-                        try {
-                            dc.translationX = targetX
-                        } catch (_: Throwable) {
-                        }
-                    }
-
-                    if (dotLogCount < 20) {
+                    if (dotLogCount < 10) {
                         dotLogCount += 1
-                        val sb = StringBuilder(
-                            "dot2 max=$max cc=$n lastRight=${lastRight.toInt()} " +
-                                "target=${targetX.toInt()} dot=${dc != null}"
+                        XposedBridge.log(
+                            "NothingTweaks dot3: max=$max iconSize=$iconSize " +
+                                "lastIconRight=${lastIconRight.toInt()} targetX=${targetX.toInt()} " +
+                                "dotX=${dc.translationX.toInt()}"
                         )
-                        for (i in 0 until n) {
-                            val c = container.getChildAt(i) ?: continue
-                            val state = try {
-                                (XposedHelpers.callMethod(c, "getVisibleState") as? Int) ?: -1
-                            } catch (_: Throwable) {
-                                -1
-                            }
-                            sb.append(" |").append(i)
-                                .append(":x=").append(c.translationX.toInt())
-                                .append(",st=").append(state)
-                                .append(",a=").append((c.alpha * 100).toInt())
-                        }
-                        XposedBridge.log("NothingTweaks $sb")
                     }
                 }
             })
