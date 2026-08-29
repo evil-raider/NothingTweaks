@@ -14,6 +14,8 @@ class NotificationIconHooks : HookModule {
     private val DOT_PADDING_PX = 2
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
+    private val CAMERA_MARGIN = 72
+    private val MIN_ICON_SIZE = 40
     @Volatile private var logCount = 0
     @Volatile private var appended = false
 
@@ -56,22 +58,31 @@ class NotificationIconHooks : HookModule {
     private fun getFloatStr(o: Any, name: String): String {
         return try { "" + XposedHelpers.getFloatField(o, name) } catch (t: Throwable) { "NA" }
     }
-    private fun getBoolStr(o: Any, name: String): String {
-        return try { "" + XposedHelpers.getBooleanField(o, name) } catch (t: Throwable) { "NA" }
-    }
 
+    private fun screenWidthOf(v: View): Int {
+        return try { v.resources.displayMetrics.widthPixels } catch (t: Throwable) { 1080 }
+    }
     private fun iconSizeOf(v: View): Int {
         return try {
             val s = XposedHelpers.getIntField(v, "mIconSize")
             if (s > 0) s else ICON_SIZE_FALLBACK
         } catch (t: Throwable) { ICON_SIZE_FALLBACK }
     }
+    // Ужимаем шаг иконки так, чтобы N иконок влезли ДО центральной камеры.
+    private fun cameraSafeAdvance(v: View, n: Int): Int {
+        if (n <= 0) return iconSizeOf(v)
+        val orig = iconSizeOf(v)
+        val cameraSafe = screenWidthOf(v) / 2 - CAMERA_MARGIN
+        val fit = cameraSafe / n
+        var adv = if (fit < orig) fit else orig
+        if (adv < MIN_ICON_SIZE) adv = MIN_ICON_SIZE
+        return adv
+    }
     private fun targetWidth(v: View, n: Int): Int {
-        var screen = 1080
-        try { screen = v.resources.displayMetrics.widthPixels } catch (t: Throwable) {}
-        val want = (n + 1) * iconSizeOf(v)
-        val cap = screen * 3 / 4
-        return if (want > cap) cap else want
+        val advance = cameraSafeAdvance(v, n)
+        val want = (n + 1) * advance
+        val hardCap = screenWidthOf(v) / 2 - 16
+        return if (want > hardCap) hardCap else want
     }
     private fun nthParent(v: View, n: Int): View? {
         var p: ViewParent? = v.parent
@@ -100,7 +111,6 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    // Наблюдение (только лог): где реально решается «4».
     private fun observe(cls: Class<*>, method: String) {
         try {
             XposedBridge.hookAllMethods(cls, method, object : XC_MethodHook() {
@@ -126,32 +136,26 @@ class NotificationIconHooks : HookModule {
         )
         if (cls == null) { writeLog("NotificationIconContainer NOT FOUND"); return }
 
-        // (A) Видимое число = N через getMaxVisibleIcons.
+        // (1) AOD/Lockscreen: возврат оригинала — лимиты = N. Чинит центрирование AOD.
         try {
-            XposedBridge.hookAllMethods(cls, "getMaxVisibleIcons", object : XC_MethodHook() {
+            XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
-                    val sb = isStatusBarIcons(v)
-                    val aod = isAodIcons(v)
-                    if (!sb && !aod) return
-                    val view = v as View
-                    val max = readMaxIcons(prefs)
-                    val orig = param.result
-                    if (sb && max != null) param.result = max
+                    val max = readMaxIcons(prefs) ?: return
+                    setIntSafe(v, "mMaxIconsOnAod", max)
+                    setIntSafe(v, "mMaxIconsOnLockscreen", max)
                     if (logCount < 90) {
                         logCount += 1
-                        val cc = if (v is ViewGroup) v.childCount else -1
-                        writeLog("GETMAX id=" + idName(view) + " orig=" + orig +
-                            " forced=" + (if (sb && max != null) max.toString() else "no") +
-                            " childCount=" + cc +
-                            " onLock=" + getBoolStr(v, "mOnLockScreen") +
-                            " static=" + getBoolStr(v, "mIsStaticLayout"))
+                        val id = if (v is View) idName(v) else "non-view"
+                        writeLog("AOD-SET id=" + id +
+                            " mMaxIconsOnAod=" + getIntStr(v, "mMaxIconsOnAod") +
+                            " mMaxIconsOnLockscreen=" + getIntStr(v, "mMaxIconsOnLockscreen"))
                     }
                 }
             })
-        } catch (t: Throwable) { writeLog("hook getMaxVisibleIcons failed: " + (t.message ?: "?")) }
+        } catch (t: Throwable) { writeLog("hook initResources failed: " + (t.message ?: "?")) }
 
-        // (B) Поля + ширина + точка (статус-бар).
+        // (2) Статус-бар: поля + ужатие иконки под камеру + ширина + точка.
         try {
             XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -162,6 +166,8 @@ class NotificationIconHooks : HookModule {
                     if (max != null) {
                         setIntSafe(v, "mMaxStaticIcons", max)
                         setIntSafe(v, "mMaxIcons", BIND_HEADROOM)
+                        val advance = cameraSafeAdvance(view, max)
+                        if (advance < iconSizeOf(view)) setIntSafe(v, "mIconSize", advance)
                         val target = targetWidth(view, max)
                         widenParents(view, target)
                         setIntSafe(v, "mActualLayoutWidth", target)
@@ -183,7 +189,7 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) { writeLog("hook calculateIconXTranslations failed: " + (t.message ?: "?")) }
 
-        // (C) Привязочный запас на контейнере статус-бара.
+        // (3) Привязочный запас на контейнере статус-бара (не даём ROM сбросить лимит).
         try {
             XposedBridge.hookAllMethods(cls, "setMaxIconsAmount", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -193,7 +199,7 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) { writeLog("hook setMaxIconsAmount failed: " + (t.message ?: "?")) }
 
-        // (D) Расчёт переполнения видит расширенную ширину.
+        // (4) Расчёт переполнения видит расширенную ширину.
         try {
             XposedBridge.hookAllMethods(cls, "getActualWidth", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -208,7 +214,7 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) { writeLog("hook getActualWidth failed: " + (t.message ?: "?")) }
 
-        // (E) Наблюдение: где решается переполнение (если (A) не сработает).
+        // (5) Наблюдение (лог): где решается переполнение.
         observe(cls, "areIconsOverflowing")
         observe(cls, "isOverflowing")
         observe(cls, "shouldForceOverflow")
