@@ -52,7 +52,7 @@ class NotificationIconHooks : HookModule {
                     }
                 })
             } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook setMaxIconsAmount: ${t.message}")
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook setMaxIconsAmount: " + t.message)
             }
 
             try {
@@ -67,7 +67,7 @@ class NotificationIconHooks : HookModule {
                     }
                 })
             } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook initResources: ${t.message}")
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook initResources: " + t.message)
             }
 
             try {
@@ -85,7 +85,7 @@ class NotificationIconHooks : HookModule {
                     }
                 })
             } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getActualWidth: ${t.message}")
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getActualWidth: " + t.message)
             }
 
             try {
@@ -113,7 +113,17 @@ class NotificationIconHooks : HookModule {
                             }
                             val iconStates = iconStatesRaw as? Map<*, *>
 
-                            val sbIcons = StringBuilder("cc=$cc actualWidth=$actualWidth L=${v.left} R=${v.right} :: ")
+                            val sbIcons = StringBuilder()
+                            sbIcons.append("cc=")
+                            sbIcons.append(cc)
+                            sbIcons.append(" actualWidth=")
+                            sbIcons.append(actualWidth)
+                            sbIcons.append(" L=")
+                            sbIcons.append(v.left)
+                            sbIcons.append(" R=")
+                            sbIcons.append(v.right)
+                            sbIcons.append(" :: ")
+
                             if (iconStates != null) {
                                 var idx = 0
                                 for (entry in iconStates.entries) {
@@ -128,39 +138,66 @@ class NotificationIconHooks : HookModule {
                                     } catch (t: Throwable) {
                                         -1f
                                     }
-                                    sbIcons.append("#$idx vs=$vs x=$x; ")
+                                    sbIcons.append("#")
+                                    sbIcons.append(idx)
+                                    sbIcons.append(" vs=")
+                                    sbIcons.append(vs)
+                                    sbIcons.append(" x=")
+                                    sbIcons.append(x)
+                                    sbIcons.append("; ")
                                     idx++
                                 }
                             }
-                            XposedBridge.log("NTX_ICO $sbIcons")
+                            XposedBridge.log("NTX_ICO " + sbIcons.toString())
 
                             val sbPar = StringBuilder()
                             var currentParent: ViewParent? = v.parent
                             var level = 0
                             while (level < 7) {
-                                val p = currentParent as? View ?: break
-                                sbPar.append("L$level[${resNameOf(p)}/${p.javaClass.simpleName} w=${p.width} l=${p.left} r=${p.right] ")
-                                currentParent = p.parent
-                                level++
+                                val p = currentParent as? View
+                                if (p == null) {
+                                    level = 7
+                                } else {
+                                    sbPar.append("L")
+                                    sbPar.append(level)
+                                    sbPar.append("[")
+                                    sbPar.append(resNameOf(p))
+                                    sbPar.append("/")
+                                    sbPar.append(p.javaClass.simpleName)
+                                    sbPar.append(" w=")
+                                    sbPar.append(p.width)
+                                    sbPar.append(" l=")
+                                    sbPar.append(p.left)
+                                    sbPar.append(" r=")
+                                    sbPar.append(p.right)
+                                    sbPar.append("] ")
+                                    currentParent = p.parent
+                                    level = level + 1
+                                }
                             }
-                            XposedBridge.log("NTX_PAR $sbPar")
+                            XposedBridge.log("NTX_PAR " + sbPar.toString())
 
                             val directParent = v.parent as? ViewGroup
                             if (directParent != null) {
                                 val sbSib = StringBuilder()
-                                for (i in 0 until directParent.childCount) {
+                                var i = 0
+                                while (i < directParent.childCount) {
                                     val child = directParent.getChildAt(i)
-                                    sbSib.append("${resNameOf(child)}/${child.javaClass.simpleName} ")
+                                    sbSib.append(resNameOf(child))
+                                    sbSib.append("/")
+                                    sbSib.append(child.javaClass.simpleName)
+                                    sbSib.append(" ")
+                                    i = i + 1
                                 }
-                                XposedBridge.log("NTX_SIB $sbSib")
+                                XposedBridge.log("NTX_SIB " + sbSib.toString())
                             }
                         } catch (t: Throwable) {
-                            XposedBridge.log("NothingTweaks: [NotificationIconHooks] NTX log error: ${t.message}")
+                            XposedBridge.log("NothingTweaks: [NotificationIconHooks] NTX log error: " + t.message)
                         }
                     }
                 })
             } catch (t: Throwable) {
-                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook calculateIconXTranslations: ${t.message}")
+                XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook calculateIconXTranslations: " + t.message)
             }
         }
 
@@ -178,7 +215,7 @@ class NotificationIconHooks : HookModule {
                 })
             }
         } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: ${t.message}")
+            XposedBridge.log("NothingTweaks: [NotificationIconHooks] FAILED to hook getIconLimit: " + t.message)
         }
     }
 }
