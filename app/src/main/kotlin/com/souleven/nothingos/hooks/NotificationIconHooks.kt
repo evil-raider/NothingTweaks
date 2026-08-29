@@ -8,10 +8,25 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.lang.ref.WeakReference
 
+/**
+ * Управляет иконками уведомлений в статусбаре:
+ *  - лимит иконок берётся из pref "pref_max_notif_icons" в формате "статусбар,аод";
+ *  - показывает не более N иконок, (N+1)-ю превращает в точку переполнения,
+ *    остальные прячет;
+ *  - точку прижимает вплотную к последней иконке и удерживает её пер-кадрово.
+ *
+ * ХРУПКИЕ ЗАВИСИМОСТИ (могут отвалиться при обновлении ROM/AOSP; всё в try/catch,
+ * поэтому поломка проявится как «твик молча перестал работать»):
+ *  - класс com.android.systemui.statusbar.phone.NotificationIconContainer;
+ *  - id контейнера "notificationIcons";
+ *  - поля mIconStates / mMaxStaticIcons / mMaxIcons / mActualLayoutWidth /
+ *    mActualPaddingStart / mIconSize;
+ *  - метод StatusBarIconView.getVisibleState()/setVisibleState().
+ */
 class NotificationIconHooks : HookModule {
 
-    private val DOT_PADDING_PX = 2
     private val DOT_ROOM_PX = 20
     private val DOT_GAP_PX = 12         // зазор точки от края последней иконки; меньше = ближе, отрицательное = ещё ближе
     private val BIND_HEADROOM = 20
@@ -21,9 +36,12 @@ class NotificationIconHooks : HookModule {
     private val STATE_DOT = 1
     private val STATE_HIDDEN = 2
 
-    private var dotLogCount = 0
     private var enforcing = false
-    private val pinnedContainers = java.util.WeakHashMap<View, Boolean>()
+    private val lifecycleHooked = java.util.WeakHashMap<View, Boolean>()
+
+    // Кэш точки для дешёвого пер-кадрового удержания (без рефлексии/Prefs в горячем пути).
+    private var dotRef: WeakReference<View>? = null
+    private var dotTargetX: Float = 0f
 
     private fun idName(v: View): String {
         return try {
@@ -133,7 +151,7 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    // Принудительно ставит состояние иконки (icon/dot/hidden) максимально надёжно.
+    // Ставит состояние иконки (icon/dot/hidden) максимально надёжно под разные ROM.
     private fun setChildState(container: ViewGroup, child: View, state: Int) {
         var ok = false
         try {
@@ -178,7 +196,8 @@ class NotificationIconHooks : HookModule {
     }
 
     // Держит видимыми не более max иконок: лишнюю превращает в точку, остальные прячет.
-    private fun enforceMax(container: ViewGroup, prefs: Prefs, tag: String, log: Boolean) {
+    // Запускается на layout-частоте (applyIconStates), не пер-кадрово.
+    private fun enforceMax(container: ViewGroup, prefs: Prefs) {
         if (enforcing) return
         enforcing = true
         try {
@@ -191,13 +210,11 @@ class NotificationIconHooks : HookModule {
 
             for (i in 0 until n) {
                 val child = container.getChildAt(i) ?: continue
-                val vs = visibleStateOf(child)
-                when (vs) {
+                when (visibleStateOf(child)) {
                     STATE_ICON -> {
                         if (shown < max) {
                             shown += 1
                         } else if (dotChild == null) {
-                            // (max+1)-я иконка становится точкой
                             setChildState(container, child, STATE_DOT)
                             dotChild = child
                         } else {
@@ -213,50 +230,65 @@ class NotificationIconHooks : HookModule {
             val dc = dotChild
             if (dc != null) {
                 positionDot(container, dc, targetX)
-            }
-
-            if (log && dotLogCount < 12) {
-                dotLogCount += 1
-                val dotIdx = if (dc != null) container.indexOfChild(dc) else -1
-                val dotX = if (dc != null) dc.translationX.toInt() else -1
-                XposedBridge.log(
-                    "NothingTweaks dot5[$tag]: max=$max cc=$n visIcons=$shown " +
-                        "dotIdx=$dotIdx dotX=$dotX targetX=${targetX.toInt()}"
-                )
+                dotRef = WeakReference(dc)
+                dotTargetX = targetX
+            } else {
+                dotRef = null
             }
         } finally {
             enforcing = false
         }
     }
 
-    // Лёгкий пер-кадровый якорь: только держит точку на месте.
-    private fun holdDot(container: ViewGroup, prefs: Prefs) {
-        val max = statusBarMax(prefs) ?: return
-        val iconSize = iconSizeOf(container)
-        val targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
-        val n = container.childCount
-        for (i in 0 until n) {
-            val child = container.getChildAt(i) ?: continue
-            if (visibleStateOf(child) == STATE_DOT) {
-                positionDot(container, child, targetX)
-                return
+    // Пер-кадровый якорь: O(1), без рефлексии/Prefs, пока точка не сдвинулась.
+    private fun holdDot() {
+        val child = dotRef?.get() ?: return
+        val target = dotTargetX
+        if (child.translationX != target && visibleStateOf(child) == STATE_DOT) {
+            try {
+                child.translationX = target
+            } catch (_: Throwable) {
             }
         }
     }
 
-    private fun ensurePreDraw(container: ViewGroup, prefs: Prefs) {
-        if (pinnedContainers.containsKey(container)) return
-        pinnedContainers[container] = true
+    // Регистрирует пер-кадровый слушатель с привязкой к жизненному циклу view:
+    // переживает detach/reattach (смена темы, рестарт SystemUI) без двойной подписки.
+    private fun ensurePreDraw(container: ViewGroup) {
+        if (lifecycleHooked.containsKey(container)) return
+        lifecycleHooked[container] = true
+
+        val predraw = ViewTreeObserver.OnPreDrawListener {
+            try {
+                holdDot()
+            } catch (_: Throwable) {
+            }
+            true
+        }
+
         try {
-            container.viewTreeObserver.addOnPreDrawListener(
-                ViewTreeObserver.OnPreDrawListener {
+            if (container.isAttachedToWindow) {
+                container.viewTreeObserver.addOnPreDrawListener(predraw)
+            }
+        } catch (_: Throwable) {
+        }
+
+        try {
+            container.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
                     try {
-                        holdDot(container, prefs)
+                        v.viewTreeObserver.addOnPreDrawListener(predraw)
                     } catch (_: Throwable) {
                     }
-                    true
                 }
-            )
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    try {
+                        v.viewTreeObserver.removeOnPreDrawListener(predraw)
+                    } catch (_: Throwable) {
+                    }
+                }
+            })
         } catch (_: Throwable) {
         }
     }
@@ -305,20 +337,17 @@ class NotificationIconHooks : HookModule {
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
                     val slots = max + 1
+                    // maxStatic=max+1 даёт родные "max иконок + точка" при большом числе уведомлений.
                     setIntSafe(container, "mMaxStaticIcons", slots)
+                    // Достаточный headroom, чтобы (max+1)-я view существовала и её можно было
+                    // превратить в точку на границе.
                     setIntSafe(container, "mMaxIcons", BIND_HEADROOM)
-                    // Щедрая ширина: пусть ROM разложит все иконки, лишнюю в точку превратим сами.
+                    // Щедрая ширина: ROM раскладывает все иконки, лишнюю в точку превращаем сами.
                     widenParents(view, fullWidth(view, slots))
                     setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, slots))
-                    setIntSafe(container, "mDotPadding", DOT_PADDING_PX)
+                    // Иконки должны начинаться с x=0, иначе ломается расчёт targetX точки.
                     setFloatSafe(container, "mActualPaddingStart", 0f)
                     setFloatSafe(container, "mActualPaddingEnd", 0f)
-                }
-
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val container = param.thisObject as? ViewGroup ?: return
-                    if (!isStatusBarIcons(container)) return
-                    ensurePreDraw(container, prefs)
                 }
             })
         } catch (_: Throwable) {
@@ -329,9 +358,9 @@ class NotificationIconHooks : HookModule {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
-                    ensurePreDraw(container, prefs)
-                    // Ключевое: состояния уже применены к view, getVisibleState() актуален.
-                    enforceMax(container, prefs, "apply", true)
+                    ensurePreDraw(container)
+                    // Состояния уже применены к view — getVisibleState() актуален.
+                    enforceMax(container, prefs)
                 }
             })
         } catch (_: Throwable) {
