@@ -10,7 +10,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
-    private val DOT_ROOM_PX = 22
+    private val DOT_ROOM_PX = 14
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
@@ -168,7 +168,7 @@ class NotificationIconHooks : HookModule {
                     if (!isStatusBarIcons(v)) return
                     val view = v as View
                     val max = statusBarMax(prefs) ?: return
-                    val target = fullWidth(view, max)
+                    val target = layoutWidth(view, max)
                     val cur = param.result as? Int ?: 0
                     if (target > cur) param.result = target
                 }
