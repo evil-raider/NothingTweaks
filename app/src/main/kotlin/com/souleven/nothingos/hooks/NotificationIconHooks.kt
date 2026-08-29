@@ -28,7 +28,7 @@ import java.lang.ref.WeakReference
 class NotificationIconHooks : HookModule {
 
     private val DOT_ROOM_PX = 20
-    private val DOT_GAP_PX = 12         // зазор точки от края последней иконки; меньше = ближе, отрицательное = ещё ближе
+    private val DOT_GAP_PX = 14         // зазор точки от края последней иконки; меньше = ближе, отрицательное = ещё ближе
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
