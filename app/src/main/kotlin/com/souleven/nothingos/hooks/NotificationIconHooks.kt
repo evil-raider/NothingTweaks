@@ -12,7 +12,7 @@ class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
     private val DOT_ROOM_PX = 20
-    private val DOT_GAP_PX = 6          // зазор глифа точки от края последней иконки; 0 = вплотную, меньше = ближе
+    private val DOT_GAP_PX = 6          // зазор точки от края последней иконки; 0 = вплотную, меньше/отрицательное = ближе
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
@@ -118,6 +118,48 @@ class NotificationIconHooks : HookModule {
         }
     }
 
+    // Находит точку (STATE_DOT = 1) и ставит её вплотную за последней иконкой.
+    // Пишем и в IconState.xTranslation, и в саму view. Вызывается из нескольких
+    // хуков; побеждает тот, что отрабатывает последним перед отрисовкой.
+    private fun pinDot(container: ViewGroup, prefs: Prefs, tag: String) {
+        val max = statusBarMax(prefs) ?: return
+        val iconSize = iconSizeOf(container)
+        val targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
+        val n = container.childCount
+        for (i in 0 until n) {
+            val child = container.getChildAt(i) ?: continue
+            val state = try {
+                (XposedHelpers.callMethod(child, "getVisibleState") as? Int) ?: -1
+            } catch (_: Throwable) {
+                -1
+            }
+            if (state == 1) {
+                try {
+                    val states = XposedHelpers.getObjectField(container, "mIconStates")
+                    val st = if (states != null) {
+                        XposedHelpers.callMethod(states, "get", child)
+                    } else {
+                        null
+                    }
+                    if (st != null) setFloatSafe(st, "xTranslation", targetX)
+                } catch (_: Throwable) {
+                }
+                try {
+                    child.translationX = targetX
+                } catch (_: Throwable) {
+                }
+                if (dotLogCount < 12) {
+                    dotLogCount += 1
+                    XposedBridge.log(
+                        "NothingTweaks dot4[$tag]: targetX=${targetX.toInt()} " +
+                            "dotX=${child.translationX.toInt()} idx=$i"
+                    )
+                }
+                return
+            }
+        }
+    }
+
     override fun handleLoadPackage(
         lpparam: XC_LoadPackage.LoadPackageParam,
         prefs: Prefs
@@ -176,56 +218,20 @@ class NotificationIconHooks : HookModule {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
-                    val max = statusBarMax(prefs) ?: return
-                    val iconSize = iconSizeOf(container)
-                    val n = container.childCount
+                    pinDot(container, prefs, "calc")
+                }
+            })
+        } catch (_: Throwable) {
+        }
 
-                    // Найти точку (STATE_DOT = 1)
-                    var dotChild: View? = null
-                    for (i in 0 until n) {
-                        val child = container.getChildAt(i) ?: continue
-                        val state = try {
-                            (XposedHelpers.callMethod(child, "getVisibleState") as? Int) ?: -1
-                        } catch (_: Throwable) {
-                            -1
-                        }
-                        if (state == 1) {
-                            dotChild = child
-                            break
-                        }
-                    }
-
-                    val dc = dotChild ?: return
-
-                    // Глиф точки рисуется по центру своей iconSize-view, из-за чего родной
-                    // код оставляет зазор ~iconSize/2. Тянем view влево на половину иконки,
-                    // чтобы глиф встал вплотную за последней иконкой.
-                    val lastIconRight = (max * iconSize).toFloat()
-                    val targetX = lastIconRight - iconSize / 2f + DOT_GAP_PX
-
-                    try {
-                        val states = XposedHelpers.getObjectField(container, "mIconStates")
-                        val st = if (states != null) {
-                            XposedHelpers.callMethod(states, "get", dc)
-                        } else {
-                            null
-                        }
-                        if (st != null) setFloatSafe(st, "xTranslation", targetX)
-                    } catch (_: Throwable) {
-                    }
-                    try {
-                        dc.translationX = targetX
-                    } catch (_: Throwable) {
-                    }
-
-                    if (dotLogCount < 10) {
-                        dotLogCount += 1
-                        XposedBridge.log(
-                            "NothingTweaks dot3: max=$max iconSize=$iconSize " +
-                                "lastIconRight=${lastIconRight.toInt()} targetX=${targetX.toInt()} " +
-                                "dotX=${dc.translationX.toInt()}"
-                        )
-                    }
+        // Ключевой хук: applyIconStates отрабатывает ПОСЛЕ расчёта и перезаписывает
+        // translationX. Пишем здесь последними, чтобы точка осталась на месте.
+        try {
+            XposedBridge.hookAllMethods(cls, "applyIconStates", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val container = param.thisObject as? ViewGroup ?: return
+                    if (!isStatusBarIcons(container)) return
+                    pinDot(container, prefs, "apply")
                 }
             })
         } catch (_: Throwable) {
