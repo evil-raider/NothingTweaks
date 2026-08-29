@@ -176,10 +176,13 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    setIntSafe(container, "mMaxStaticIcons", max)
+                    // ROM трактует mMaxStaticIcons как число слотов ВКЛЮЧАЯ слот под точку,
+                    // поэтому для N иконок + точка нужно N+1 слотов.
+                    val slots = max + 1
+                    setIntSafe(container, "mMaxStaticIcons", slots)
                     setIntSafe(container, "mMaxIcons", BIND_HEADROOM)
-                    widenParents(view, fullWidth(view, max))
-                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, max))
+                    widenParents(view, fullWidth(view, slots))
+                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, slots))
                     setIntSafe(container, "mDotPadding", DOT_PADDING_PX)
                     setFloatSafe(container, "mActualPaddingStart", 0f)
                     setFloatSafe(container, "mActualPaddingEnd", 0f)
@@ -189,27 +192,17 @@ class NotificationIconHooks : HookModule {
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isStatusBarIcons(container)) return
                     val max = statusBarMax(prefs) ?: return
-                    if (container.childCount <= max) return
-
-                    val iconSize = iconSizeOf(container)
-                    val dotStart = (max * iconSize + DOT_PADDING_PX).toFloat() - (iconSize * 0.75f)
-
-                    val beforeF = getFloatFieldSafe(container, "mVisualOverflowStart")
-                    val beforeI = getIntFieldSafe(container, "mVisualOverflowStart")
-
-                    setFloatSafe(container, "mVisualOverflowStart", dotStart)
-                    setIntSafe(container, "mVisualOverflowStart", dotStart.toInt())
 
                     if (dotLogCount < 15) {
                         dotLogCount += 1
+                        val overflow = getFloatFieldSafe(container, "mVisualOverflowStart")
+                        val staticCount = getIntFieldSafe(container, "mMaxStaticIcons")
                         XposedBridge.log(
-                            "NothingTweaks dot-pin: max=$max iconSize=$iconSize " +
-                                "dotStart=$dotStart beforeF=$beforeF beforeI=$beforeI " +
+                            "NothingTweaks dot-pin: max=$max slots=${max + 1} " +
+                                "overflowStart=$overflow maxStatic=$staticCount " +
                                 "count=${container.childCount}"
                         )
                     }
-
-                    container.invalidate()
                 }
             })
         } catch (_: Throwable) {
@@ -233,7 +226,8 @@ class NotificationIconHooks : HookModule {
 
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
-                    param.result = layoutWidth(view, max)
+                    // Ширина с запасом на N+1 слот, чтобы точку не срезало по краю.
+                    param.result = layoutWidth(view, max + 1)
                 }
             })
         } catch (_: Throwable) {
