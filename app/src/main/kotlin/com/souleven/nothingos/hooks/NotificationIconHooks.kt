@@ -9,8 +9,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 
 class NotificationIconHooks : HookModule {
 
-    private val DOT_PADDING_PX = 2
-    private val BIND_LIMIT = 20
+    private val DOT_PADDING_PX = 2      // зазор точки (меньше = ближе к иконкам)
+    private val BIND_HEADROOM = 20      // запас привязки, чтобы точка появлялась при >N
     @Volatile private var logCount = 0
 
     private fun isStatusBarIcons(obj: Any?): Boolean {
@@ -24,9 +24,13 @@ class NotificationIconHooks : HookModule {
         }
     }
 
+    // Настройка — текстовое поле (хранится строкой). Читаем и парсим в число.
     private fun readMaxIcons(prefs: Prefs): Int? {
-        val v = prefs.getInt("pref_max_notif_icons", -1)
-        return if (v > 0) v else null
+        return try {
+            prefs.getString("pref_max_notif_icons", "")?.trim()?.toIntOrNull()?.takeIf { it in 1..50 }
+        } catch (t: Throwable) {
+            null
+        }
     }
 
     private fun setIntSafe(o: Any, name: String, value: Int) {
@@ -52,14 +56,16 @@ class NotificationIconHooks : HookModule {
             XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
-                    if (!isStatusBarIcons(v)) return
-                    setIntSafe(v, "mDotPadding", DOT_PADDING_PX)
-                    setFloatSafe(v, "mActualPaddingStart", 0f)
+                    if (!isStatusBarIcons(v)) return   // AOD/локскрин/полка НЕ трогаем
+
                     val max = readMaxIcons(prefs)
                     if (max != null) {
-                        setIntSafe(v, "mMaxStaticIcons", max)
-                        setIntSafe(v, "mMaxIcons", max)
+                        setIntSafe(v, "mMaxStaticIcons", max)      // видно ровно N
+                        setIntSafe(v, "mMaxIcons", BIND_HEADROOM)  // запас -> точка при >N
                     }
+                    setIntSafe(v, "mDotPadding", DOT_PADDING_PX)   // точка вплотную
+                    setFloatSafe(v, "mActualPaddingStart", 0f)     // убрать фантомный отступ
+
                     if (logCount < 12 && v is ViewGroup && v.childCount >= 3) {
                         logCount += 1
                         XposedBridge.log(
@@ -79,32 +85,8 @@ class NotificationIconHooks : HookModule {
             XposedBridge.log("NothingTweaks: [NotificationIconHooks] calculateIconXTranslations failed: ${t.message}")
         }
 
-        try {
-            XposedBridge.hookAllMethods(containerClass, "setMaxIconsAmount", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (!isStatusBarIcons(param.thisObject)) return
-                    val max = readMaxIcons(prefs) ?: return
-                    if (param.args.isNotEmpty()) param.args[0] = max
-                }
-            })
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] setMaxIconsAmount failed: ${t.message}")
-        }
-
-        try {
-            val dataClass = XposedHelpers.findClassIfExists(
-                "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData",
-                lpparam.classLoader
-            )
-            if (dataClass != null) {
-                XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        param.result = BIND_LIMIT
-                    }
-                })
-            }
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: [NotificationIconHooks] getIconLimit failed: ${t.message}")
-        }
+        // getIconLimit / initResources НЕ трогаем — AOD остаётся стоковым и
+        // центрируется. Если STATE покажет childCount, упирающийся в N (точки
+        // нет) — тогда точечно поднимем привязку, это следующий шаг по данным.
     }
 }
