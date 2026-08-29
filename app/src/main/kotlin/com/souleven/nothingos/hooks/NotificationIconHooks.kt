@@ -10,6 +10,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 class NotificationIconHooks : HookModule {
 
     private val DOT_PADDING_PX = 2
+    private val DOT_ROOM_PX = 22
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
 
@@ -22,10 +23,22 @@ class NotificationIconHooks : HookModule {
         return obj is View && idName(obj) == "notificationIcons"
     }
 
-    private fun readMaxIcons(prefs: Prefs): Int? {
-        return try {
-            prefs.getString("pref_max_notif_icons", "")?.trim()?.toIntOrNull()?.takeIf { it in 1..50 }
-        } catch (t: Throwable) { null }
+    // --- Настройка: "статусбар,аод" ---
+    private fun rawMax(prefs: Prefs): String {
+        return try { prefs.getString("pref_max_notif_icons", "") ?: "" } catch (t: Throwable) { "" }
+    }
+    private fun parseAt(raw: String, index: Int): Int? {
+        val parts = raw.split(",")
+        if (index >= parts.size) return null
+        val n = parts[index].trim().toIntOrNull() ?: return null
+        return if (n in 1..50) n else null
+    }
+    private fun statusBarMax(prefs: Prefs): Int? {
+        return parseAt(rawMax(prefs), 0)
+    }
+    private fun aodMax(prefs: Prefs): Int? {
+        val raw = rawMax(prefs)
+        return parseAt(raw, 1) ?: parseAt(raw, 0)
     }
 
     private fun setIntSafe(o: Any, name: String, value: Int) {
@@ -41,11 +54,19 @@ class NotificationIconHooks : HookModule {
             if (s > 0) s else ICON_SIZE_FALLBACK
         } catch (t: Throwable) { ICON_SIZE_FALLBACK }
     }
-    private fun targetWidth(v: View, n: Int): Int {
-        var screen = 1080
-        try { screen = v.resources.displayMetrics.widthPixels } catch (t: Throwable) {}
+    private fun screenWidthOf(v: View): Int {
+        return try { v.resources.displayMetrics.widthPixels } catch (t: Throwable) { 1080 }
+    }
+    // Широкая ширина для родителей/переполнения — чтобы N не обрезались.
+    private fun fullWidth(v: View, n: Int): Int {
         val want = (n + 1) * iconSizeOf(v)
-        val cap = screen * 3 / 4
+        val cap = screenWidthOf(v) * 3 / 4
+        return if (want > cap) cap else want
+    }
+    // Тесная ширина раскладки — чтобы точка прижималась к последней иконке.
+    private fun layoutWidth(v: View, n: Int): Int {
+        val want = n * iconSizeOf(v) + DOT_ROOM_PX
+        val cap = screenWidthOf(v) * 3 / 4
         return if (want > cap) cap else want
     }
     private fun nthParent(v: View, n: Int): View? {
@@ -81,18 +102,18 @@ class NotificationIconHooks : HookModule {
             lpparam.classLoader
         ) ?: return
 
-        // (1) AOD/Lockscreen: как в оригинале до правок — лимиты контейнера = N.
+        // (1) AOD/Lockscreen: лимиты контейнера = второе число.
         try {
             XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    val max = readMaxIcons(prefs) ?: return
+                    val max = aodMax(prefs) ?: return
                     setIntSafe(param.thisObject, "mMaxIconsOnAod", max)
                     setIntSafe(param.thisObject, "mMaxIconsOnLockscreen", max)
                 }
             })
         } catch (t: Throwable) {}
 
-        // (2) AOD (ViewModel Android 14+): третий хук из оригинала — он и давал AOD 7-8.
+        // (2) AOD (ViewModel Android 14+): третий хук из оригинала = второе число.
         try {
             val dataClass = XposedHelpers.findClassIfExists(
                 "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData",
@@ -101,35 +122,35 @@ class NotificationIconHooks : HookModule {
             if (dataClass != null) {
                 XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        val max = readMaxIcons(prefs) ?: return
+                        val max = aodMax(prefs) ?: return
                         param.result = max
                     }
                 })
             }
         } catch (t: Throwable) {}
 
-        // (3) Статус-бар: N статичных иконок + ширина + точка (рабочий вариант из теста).
+        // (3) Статус-бар: первое число + тесная точка.
         try {
             XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
                     if (!isStatusBarIcons(v)) return
                     val view = v as View
-                    val max = readMaxIcons(prefs)
+                    val max = statusBarMax(prefs)
                     if (max != null) {
                         setIntSafe(v, "mMaxStaticIcons", max)
                         setIntSafe(v, "mMaxIcons", BIND_HEADROOM)
-                        val target = targetWidth(view, max)
-                        widenParents(view, target)
-                        setIntSafe(v, "mActualLayoutWidth", target)
+                        widenParents(view, fullWidth(view, max))
+                        setIntSafe(v, "mActualLayoutWidth", layoutWidth(view, max))
                     }
                     setIntSafe(v, "mDotPadding", DOT_PADDING_PX)
                     setFloatSafe(v, "mActualPaddingStart", 0f)
+                    setFloatSafe(v, "mActualPaddingEnd", 0f)
                 }
             })
         } catch (t: Throwable) {}
 
-        // (4) Привязочный запас — не даём ROM сбросить лимит статус-бара.
+        // (4) Привязочный запас статус-бара.
         try {
             XposedBridge.hookAllMethods(cls, "setMaxIconsAmount", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -139,15 +160,15 @@ class NotificationIconHooks : HookModule {
             })
         } catch (t: Throwable) {}
 
-        // (5) Переполнение статус-бара видит расширенную ширину.
+        // (5) Переполнение статус-бара видит широкую ширину.
         try {
             XposedBridge.hookAllMethods(cls, "getActualWidth", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
                     if (!isStatusBarIcons(v)) return
                     val view = v as View
-                    val max = readMaxIcons(prefs) ?: return
-                    val target = targetWidth(view, max)
+                    val max = statusBarMax(prefs) ?: return
+                    val target = fullWidth(view, max)
                     val cur = param.result as? Int ?: 0
                     if (target > cur) param.result = target
                 }
