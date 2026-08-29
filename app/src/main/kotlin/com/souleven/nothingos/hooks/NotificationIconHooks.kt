@@ -3,6 +3,7 @@ package com.souleven.nothingos.hooks
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
+import java.io.FileWriter
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -14,19 +15,25 @@ class NotificationIconHooks : HookModule {
     private val BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
     @Volatile private var logCount = 0
+    @Volatile private var appended = false
+
+    private fun writeLog(line: String) {
+        try {
+            val fw = FileWriter("/sdcard/nothingtweaks_debug.txt", appended)
+            appended = true
+            fw.write(line); fw.write("\n"); fw.close()
+        } catch (t: Throwable) {}
+        try { XposedBridge.log("NothingTweaks: " + line) } catch (t: Throwable) {}
+    }
 
     private fun idName(v: View): String {
         return try {
             if (v.id != View.NO_ID) v.resources.getResourceEntryName(v.id) else "no-id"
-        } catch (t: Throwable) {
-            "res-error"
-        }
+        } catch (t: Throwable) { "res-error" }
     }
-
     private fun isStatusBarIcons(obj: Any?): Boolean {
         return obj is View && idName(obj) == "notificationIcons"
     }
-
     private fun isAodIcons(obj: Any?): Boolean {
         return obj is View && idName(obj) == "aod_notification_icon_container"
     }
@@ -34,9 +41,7 @@ class NotificationIconHooks : HookModule {
     private fun readMaxIcons(prefs: Prefs): Int? {
         return try {
             prefs.getString("pref_max_notif_icons", "")?.trim()?.toIntOrNull()?.takeIf { it in 1..50 }
-        } catch (t: Throwable) {
-            null
-        }
+        } catch (t: Throwable) { null }
     }
 
     private fun setIntSafe(o: Any, name: String, value: Int) {
@@ -59,11 +64,8 @@ class NotificationIconHooks : HookModule {
         return try {
             val s = XposedHelpers.getIntField(v, "mIconSize")
             if (s > 0) s else ICON_SIZE_FALLBACK
-        } catch (t: Throwable) {
-            ICON_SIZE_FALLBACK
-        }
+        } catch (t: Throwable) { ICON_SIZE_FALLBACK }
     }
-
     private fun targetWidth(v: View, n: Int): Int {
         var screen = 1080
         try { screen = v.resources.displayMetrics.widthPixels } catch (t: Throwable) {}
@@ -71,7 +73,6 @@ class NotificationIconHooks : HookModule {
         val cap = screen * 3 / 4
         return if (want > cap) cap else want
     }
-
     private fun nthParent(v: View, n: Int): View? {
         var p: ViewParent? = v.parent
         var i = 1
@@ -82,7 +83,6 @@ class NotificationIconHooks : HookModule {
         }
         return if (p is View) p as View else null
     }
-
     private fun widenParents(v: View, target: Int) {
         var level = 1
         while (level <= 4) {
@@ -100,17 +100,35 @@ class NotificationIconHooks : HookModule {
         }
     }
 
+    // Наблюдение (только лог): где реально решается «4».
+    private fun observe(cls: Class<*>, method: String) {
+        try {
+            XposedBridge.hookAllMethods(cls, method, object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val v = param.thisObject
+                    if (!isStatusBarIcons(v) && !isAodIcons(v)) return
+                    if (logCount >= 90) return
+                    logCount += 1
+                    val view = v as View
+                    val cc = if (v is ViewGroup) v.childCount else -1
+                    writeLog("OBS " + method + " id=" + idName(view) +
+                        " result=" + param.result + " childCount=" + cc)
+                }
+            })
+        } catch (t: Throwable) { writeLog("observe " + method + " failed: " + (t.message ?: "?")) }
+    }
+
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam, prefs: Prefs) {
-        val containerClass = XposedHelpers.findClassIfExists(
+        writeLog("=== ENTER pkg=" + lpparam.packageName + " t=" + System.currentTimeMillis() + " ===")
+        val cls = XposedHelpers.findClassIfExists(
             "com.android.systemui.statusbar.phone.NotificationIconContainer",
             lpparam.classLoader
-        ) ?: return
+        )
+        if (cls == null) { writeLog("NotificationIconContainer NOT FOUND"); return }
 
-        // (A) ГЛАВНЫЙ РЫЧАГ: видимое число статус-бара = N напрямую через
-        //     getMaxVisibleIcons. Поле mMaxStaticIcons на этом ROM игнорируется
-        //     (лог v7: maxStatic=8, а видно 4).
+        // (A) Видимое число = N через getMaxVisibleIcons.
         try {
-            XposedBridge.hookAllMethods(containerClass, "getMaxVisibleIcons", object : XC_MethodHook() {
+            XposedBridge.hookAllMethods(cls, "getMaxVisibleIcons", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
                     val sb = isStatusBarIcons(v)
@@ -119,31 +137,23 @@ class NotificationIconHooks : HookModule {
                     val view = v as View
                     val max = readMaxIcons(prefs)
                     val orig = param.result
-                    if (sb && max != null) {
-                        param.result = max
-                    }
-                    if (logCount < 20) {
+                    if (sb && max != null) param.result = max
+                    if (logCount < 90) {
                         logCount += 1
                         val cc = if (v is ViewGroup) v.childCount else -1
-                        XposedBridge.log(
-                            "NothingTweaks: GETMAX id=" + idName(view) +
-                            " orig=" + orig +
+                        writeLog("GETMAX id=" + idName(view) + " orig=" + orig +
                             " forced=" + (if (sb && max != null) max.toString() else "no") +
                             " childCount=" + cc +
                             " onLock=" + getBoolStr(v, "mOnLockScreen") +
-                            " staticLayout=" + getBoolStr(v, "mIsStaticLayout")
-                        )
+                            " static=" + getBoolStr(v, "mIsStaticLayout"))
                     }
                 }
             })
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: hook getMaxVisibleIcons failed: ${t.message}")
-        }
+        } catch (t: Throwable) { writeLog("hook getMaxVisibleIcons failed: " + (t.message ?: "?")) }
 
-        // (B) Физически вместить N + поджать точку + убрать фантомный отступ.
-        //     Только статус-бар.
+        // (B) Поля + ширина + точка (статус-бар).
         try {
-            XposedBridge.hookAllMethods(containerClass, "calculateIconXTranslations", object : XC_MethodHook() {
+            XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
                     if (!isStatusBarIcons(v)) return
@@ -158,30 +168,34 @@ class NotificationIconHooks : HookModule {
                     }
                     setIntSafe(v, "mDotPadding", DOT_PADDING_PX)
                     setFloatSafe(v, "mActualPaddingStart", 0f)
-
-                    if (logCount < 20 && v is ViewGroup && v.childCount >= 3) {
+                    if (logCount < 90 && v is ViewGroup && v.childCount >= 3) {
                         logCount += 1
-                        XposedBridge.log(
-                            "NothingTweaks: STATE read=" + (max?.toString() ?: "NULL") +
-                            " childCount=" + v.childCount +
-                            " width=" + view.width +
+                        writeLog("STATE read=" + (max?.toString() ?: "NULL") +
+                            " childCount=" + v.childCount + " width=" + view.width +
                             " maxStatic=" + getIntStr(v, "mMaxStaticIcons") +
                             " maxIcons=" + getIntStr(v, "mMaxIcons") +
                             " actualLayoutW=" + getIntStr(v, "mActualLayoutWidth") +
                             " padStart=" + getFloatStr(v, "mActualPaddingStart") +
                             " dotPad=" + getIntStr(v, "mDotPadding") +
-                            " iconSize=" + getIntStr(v, "mIconSize")
-                        )
+                            " iconSize=" + getIntStr(v, "mIconSize"))
                     }
                 }
             })
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: hook calculateIconXTranslations failed: ${t.message}")
-        }
+        } catch (t: Throwable) { writeLog("hook calculateIconXTranslations failed: " + (t.message ?: "?")) }
 
-        // (C) Чтобы расчёт переполнения видел расширенную область.
+        // (C) Привязочный запас на контейнере статус-бара.
         try {
-            XposedBridge.hookAllMethods(containerClass, "getActualWidth", object : XC_MethodHook() {
+            XposedBridge.hookAllMethods(cls, "setMaxIconsAmount", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (!isStatusBarIcons(param.thisObject)) return
+                    if (param.args.isNotEmpty()) param.args[0] = BIND_HEADROOM
+                }
+            })
+        } catch (t: Throwable) { writeLog("hook setMaxIconsAmount failed: " + (t.message ?: "?")) }
+
+        // (D) Расчёт переполнения видит расширенную ширину.
+        try {
+            XposedBridge.hookAllMethods(cls, "getActualWidth", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val v = param.thisObject
                     if (!isStatusBarIcons(v)) return
@@ -192,8 +206,13 @@ class NotificationIconHooks : HookModule {
                     if (target > cur) param.result = target
                 }
             })
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingTweaks: hook getActualWidth failed: ${t.message}")
-        }
+        } catch (t: Throwable) { writeLog("hook getActualWidth failed: " + (t.message ?: "?")) }
+
+        // (E) Наблюдение: где решается переполнение (если (A) не сработает).
+        observe(cls, "areIconsOverflowing")
+        observe(cls, "isOverflowing")
+        observe(cls, "shouldForceOverflow")
+
+        writeLog("=== HOOKS SET ===")
     }
 }
