@@ -146,7 +146,7 @@
             app:key="pref_max_notif_icons"
             app:title="@string/pref_max_notif_icons_title"
             app:summary="@string/pref_max_notif_icons_summary"
-            app:dialogTitle="@string/pref_max_notif_icons_title"
+            app:dialogTitle="@string/pref_max_notif_icons_dialog_title"
             app:iconSpaceReserved="false"
             app:useSimpleSummaryProvider="false" />
     </PreferenceCategory>
