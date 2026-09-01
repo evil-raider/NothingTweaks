@@ -50,6 +50,7 @@
 
     <string name="pref_max_notif_icons_title">Notification Icon Limit</string>
     <string name="pref_max_notif_icons_summary">Maximum number of notification icons to show in the status bar and AOD. Leave blank for default.</string>
+    <string name="pref_max_notif_icons_dialog_title">Notification Icon Limit</string>
 
     <string name="pref_reduce_edge_padding_title">Reduce Edge Padding</string>
     <string name="pref_reduce_edge_padding_summary">Reduces the empty space at the left and right edges of the status bar.</string>
