@@ -306,8 +306,11 @@ class NotificationIconHooks : HookModule {
             XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val max = aodMax(prefs) ?: return
-                    setIntSafe(param.thisObject, "mMaxIconsOnAod", max)
-                    setIntSafe(param.thisObject, "mMaxIconsOnLockscreen", max)
+                    // +1 слот под точку переполнения: заданное число = число иконок,
+                    // точка добавляется сверху (как в статусбаре, mMaxStaticIcons = max + 1).
+                    val slots = max + 1
+                    setIntSafe(param.thisObject, "mMaxIconsOnAod", slots)
+                    setIntSafe(param.thisObject, "mMaxIconsOnLockscreen", slots)
                 }
             })
         } catch (_: Throwable) {
@@ -321,7 +324,9 @@ class NotificationIconHooks : HookModule {
             if (dataClass != null) {
                 XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        aodMax(prefs)?.let { param.result = it }
+                        // +1 слот под точку переполнения, чтобы AOD показывал "N иконок + точка"
+                        // как статусбар (иначе выходит "N-1 иконок + точка").
+                        aodMax(prefs)?.let { param.result = it + 1 }
                     }
                 })
             }
