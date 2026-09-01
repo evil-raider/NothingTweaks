@@ -37,7 +37,7 @@
     <string name="pref_transparent_nav_bar_desc">Hareket çubuğunu (pill) görünmez yapar ancak hareketler ve Circle to Search için tam işlevselliğini korur.\n\nNOT: Önce sistem ayarlarınızdan gezinme çubuğunu etkinleştirmeniz, ayrıca Circle to Search özelliğinin sistem ayarlarınızda açık olduğundan emin olmanız GEREKİR, ardından çubuğu gizlemek için bunu açın!</string>
 
     <string name="title_hide_ime_bar">Klavye Boşluğunu Gizle</string>
-    <string name="summary_hide_ime_bar">Klavyenin altındaki boş alanı kaldırır ve yazarken gezinme tutamacını gizler</string>
+    <string name="summary_hide_ime_bar">Klavyenin altındaki boş alanı kaldırır ve yazarken gezinme tutamağını gizler</string>
 
     <string name="pref_back_gesture_kill_title">Uygulamayı Kapatmak İçin Uzun Geri Kaydırma</string>
     <string name="pref_back_gesture_kill_summary">Geri kaydırma hareketini basılı tutup bırakarak ön plandaki uygulamayı zorla durdurun.</string>
@@ -50,7 +50,6 @@
 
     <string name="pref_max_notif_icons_title">Bildirim Simgesi Sınırı</string>
     <string name="pref_max_notif_icons_summary">Durum çubuğunda ve AOD\'de gösterilecek maksimum bildirim simgesi sayısı. Varsayılan için boş bırakın.</string>
-    <string name="pref_max_notif_icons_dialog_title">Bildirim Simgesi Sınırı</string>
 
     <string name="pref_reduce_edge_padding_title">Kenar Boşluğunu Azalt</string>
     <string name="pref_reduce_edge_padding_summary">Durum çubuğunun sol ve sağ kenarlarındaki boş alanı azaltır.</string>
