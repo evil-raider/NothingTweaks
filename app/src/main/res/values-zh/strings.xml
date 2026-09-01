@@ -50,6 +50,7 @@
 
     <string name="pref_max_notif_icons_title">通知图标数量限制</string>
     <string name="pref_max_notif_icons_summary">在状态栏和息屏显示(AOD)上显示的最大通知图标数量。留空则使用默认值。</string>
+    <string name="pref_max_notif_icons_dialog_title">格式：X,Y (X=状态栏, Y=AOD)</string>
 
     <string name="pref_reduce_edge_padding_title">减小边缘边距</string>
     <string name="pref_reduce_edge_padding_summary">减小状态栏左右两端的空白区域。</string>
