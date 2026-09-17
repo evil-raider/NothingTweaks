@@ -55,6 +55,12 @@
     <string name="pref_reduce_edge_padding_title">Reduce Edge Padding</string>
     <string name="pref_reduce_edge_padding_summary">Reduces the empty space at the left and right edges of the status bar.</string>
 
+    <!-- Quick Settings -->
+    <string name="cat_quicksettings">Quick Settings</string>
+
+    <string name="pref_fix_qs_tile_color_title">Keep tiles white (Iconify)</string>
+    <string name="pref_fix_qs_tile_color_summary">Prevents inactive Quick Settings tiles from turning stock grey-blue when Iconify\'s light QS panel is active. Re-applies the tile\'s intended colour on every refresh.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Status bar clock</string>
 
@@ -77,7 +83,7 @@
     <string name="cat_capture">Screenshots &amp; Screen recording</string>
 
     <string name="pref_watermark">Add serial number to screenshots</string>
-    <string name="pref_watermark_desc">Off by default. Turning it on draws "SN:" + your device serial onto every screenshot.</string>
+    <string name="pref_watermark_desc">Off by default. Turning it on draws \"SN:\" + your device serial onto every screenshot.</string>
 
     <string name="pref_record_limit">Screen Recorder Quality</string>
     <string name="pref_record_limit_desc">Forces a resolution or frame-rate clamp in ScreenMediaRecorder. Off leaves stock behaviour untouched.</string>

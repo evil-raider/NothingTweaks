@@ -152,6 +152,18 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        app:title="@string/cat_quicksettings"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="pref_fix_qs_tile_color"
+            app:title="@string/pref_fix_qs_tile_color_title"
+            app:summary="@string/pref_fix_qs_tile_color_summary"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:title="@string/cat_features"
         app:iconSpaceReserved="false">
 
