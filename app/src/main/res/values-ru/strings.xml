@@ -55,6 +55,12 @@
     <string name="pref_reduce_edge_padding_title">Уменьшить отступы по краям</string>
     <string name="pref_reduce_edge_padding_summary">Уменьшает пустое пространство по левому и правому краям строки состояния.</string>
 
+    <!-- Quick Settings -->
+    <string name="cat_quicksettings">Быстрые настройки</string>
+
+    <string name="pref_fix_qs_tile_color_title">Белые плитки (Iconify)</string>
+    <string name="pref_fix_qs_tile_color_summary">Не даёт неактивным плиткам быстрых настроек становиться стандартными серо-синими, когда активна светлая панель QS от Iconify. Заново применяет нужный цвет плитки при каждом обновлении.</string>
+
     <!-- Status bar clock -->
     <string name="cat_clock">Часы в строке состояния</string>
 
