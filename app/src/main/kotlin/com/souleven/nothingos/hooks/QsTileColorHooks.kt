@@ -1,6 +1,5 @@
 package com.souleven.nothingos.hooks
 
-import android.content.Context
 import com.souleven.nothingos.MainHook
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -9,47 +8,51 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 /**
  * Fixes a Nothing OS bug where inactive Quick Settings tiles lose Iconify's
- * white background and fall back to the stock grey-blue colour until the tile
- * is tapped once. Most reliably reproduced by a theme switch (e.g. battery
- * saver forcing dark theme, then returning to the light theme).
+ * white background and fall back to the stock grey-blue colour.
  *
- * Root cause (see AOSP QSTileViewImpl):
- *  - colorActive/colorInactive/colorUnavailable are `val`s resolved ONCE in the
- *    constructor from theme attrs (R.attr.shadeInactive etc).
- *  - handleStateChanged only re-applies colours WHEN THE STATE CHANGES
- *    (`if (state.state != lastState ...)`).
- *  - A theme/config change goes through onConfigurationChanged -> updateResources(),
- *    NOT handleStateChanged, and re-applies the stored backgroundColor.
- *  - Iconify's white inactive fill comes from an RRO overlay feeding
- *    shadeInactive. During a theme transition the tile can be (re)constructed
- *    while the light overlay isn't applied yet, so its cached colorInactive is
- *    the stock grey-blue and is never corrected without a state change.
+ * WHAT ON-DEVICE LOGS REVEALED (Nothing Phone 3a):
+ *  - The real tile class is com.nothing.systemui.qs.TwinButtonsTileView, a
+ *    Nothing subclass of QSTileViewImpl. Hooking the base class methods works
+ *    because the subclass inherits them.
+ *  - For an inactive tile the base `backgroundColor` field is #00000000
+ *    (transparent). Nothing does NOT tint the base drawable for inactive tiles;
+ *    the visible white comes from a layer behind it / Iconify's light panel
+ *    showing through the transparent base.
+ *  - Resolving R.attr.shadeInactive on this context returns a DARK colour
+ *    (#FF2F3036), not Iconify's white. So the theme attribute is the wrong
+ *    source here, and painting it turned every inactive tile black.
  *
- * Fix strategy:
- *  1. Hook BOTH handleStateChanged (self-heals on any state refresh) AND
- *     updateResources (catches theme/config changes).
- *  2. Re-resolve shadeInactive LIVE from the tile's current theme instead of
- *     trusting the cached colorInactive val, so we pick up Iconify's overlay
- *     once it has settled. Fall back to the cached field (never a hard-coded
- *     white, which would wrongly whiten inactive tiles in dark theme).
- *  3. Only repaint when the tile is INACTIVE and the colour actually differs.
+ * CORRECTION STRATEGY:
+ *  - The natural, correct inactive state is a transparent base. The grey-blue
+ *    glitch is an unexpected opaque tint landing on the base drawable. So we
+ *    only ever RESET the base tint back to transparent, and only when it isn't
+ *    already transparent. In the normal case this is a no-op, so we never fight
+ *    Nothing's own rendering and never force a wrong colour.
+ *  - Runs on both handleStateChanged (state refreshes) and updateResources
+ *    (theme/config changes).
  *
- * Everything is wrapped in try/catch -> silent no-op on ROM mismatch, never
- * crashes SystemUI. Diagnostic lines are logged under MainHook.TAG so it is
- * possible to tell from LSPosed logs whether the hook loaded, on which class it
- * fires, and when it actually repaints a tile.
+ * DIAGNOSTICS:
+ *  - A one-time reflective dump of every int / Drawable / Color field across the
+ *    tile's class hierarchy is logged under MainHook.TAG. If the grey-blue tint
+ *    turns out to live on a separate Nothing field rather than the base
+ *    backgroundColor, that dump pinpoints the exact field to target next.
+ *
+ * Everything is wrapped in try/catch -> silent no-op on ROM mismatch.
  */
 class QsTileColorHooks : HookModule {
 
     private companion object {
         const val PREF_KEY = "pref_fix_qs_tile_color"
         const val STATE_INACTIVE = 1
+        const val TRANSPARENT = 0
         const val QS_TILE_VIEW = "com.android.systemui.qs.tileimpl.QSTileViewImpl"
-        const val SETTINGS_UTILS = "com.android.settingslib.Utils"
-        const val CORRECTION_LOG_LIMIT = 12
+        const val CORRECTION_LOG_LIMIT = 8
 
         @Volatile
         var firingLogged = false
+
+        @Volatile
+        var dumped = false
 
         @Volatile
         var correctionLogs = 0
@@ -66,31 +69,22 @@ class QsTileColorHooks : HookModule {
 
         val hook = object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                reassertInactiveColor(param.thisObject, lpparam.classLoader)
+                onTileRefresh(param.thisObject)
             }
         }
 
         var installed = 0
-        try {
-            installed += XposedBridge.hookAllMethods(cls, "handleStateChanged", hook).size
-        } catch (t: Throwable) {
-            XposedBridge.log("${MainHook.TAG} QsTileColorHooks: handleStateChanged hook failed: ${t.message}")
+        for (method in arrayOf("handleStateChanged", "updateResources")) {
+            try {
+                installed += XposedBridge.hookAllMethods(cls, method, hook).size
+            } catch (t: Throwable) {
+                XposedBridge.log("${MainHook.TAG} QsTileColorHooks: $method hook failed: ${t.message}")
+            }
         }
-        try {
-            installed += XposedBridge.hookAllMethods(cls, "updateResources", hook).size
-        } catch (t: Throwable) {
-            XposedBridge.log("${MainHook.TAG} QsTileColorHooks: updateResources hook failed: ${t.message}")
-        }
-
         XposedBridge.log("${MainHook.TAG} QsTileColorHooks: installed $installed hook(s) on ${cls.name}")
     }
 
-    /**
-     * Re-asserts the correct inactive background colour on the given tile view.
-     * No-op unless the tile is currently INACTIVE and the applied colour differs
-     * from the freshly resolved target.
-     */
-    private fun reassertInactiveColor(view: Any?, classLoader: ClassLoader) {
+    private fun onTileRefresh(view: Any?) {
         if (view == null) return
         try {
             if (!firingLogged) {
@@ -105,27 +99,26 @@ class QsTileColorHooks : HookModule {
             }
             if (lastState != STATE_INACTIVE) return
 
-            val target = resolveInactiveColor(view, classLoader)
-                ?: try {
-                    XposedHelpers.getIntField(view, "colorInactive")
-                } catch (_: Throwable) {
-                    return
-                }
+            if (!dumped) {
+                dumped = true
+                dumpColorState(view)
+            }
 
             val current = try {
                 XposedHelpers.getIntField(view, "backgroundColor")
             } catch (_: Throwable) {
-                Int.MIN_VALUE
+                return
             }
-            if (current == target) return
+            // Normal inactive state is already transparent -> nothing to do.
+            // Only undo a stray opaque tint (the grey-blue glitch).
+            if (current == TRANSPARENT) return
 
-            XposedHelpers.callMethod(view, "setColor", target)
+            XposedHelpers.callMethod(view, "setColor", TRANSPARENT)
 
             if (correctionLogs < CORRECTION_LOG_LIMIT) {
                 correctionLogs++
                 XposedBridge.log(
-                    "${MainHook.TAG} QsTileColorHooks: repainted inactive tile " +
-                        "${hex(current)} -> ${hex(target)}"
+                    "${MainHook.TAG} QsTileColorHooks: reset inactive tile ${hex(current)} -> #00000000"
                 )
             }
         } catch (_: Throwable) {
@@ -134,21 +127,35 @@ class QsTileColorHooks : HookModule {
     }
 
     /**
-     * Freshly resolves R.attr.shadeInactive from the tile's *current* theme,
-     * exactly like QSTileViewImpl's constructor. Reading it live (instead of the
-     * cached colorInactive val) fixes the theme-switch race where the tile was
-     * constructed while Iconify's light overlay wasn't applied yet. Returns null
-     * on any mismatch so the caller falls back to the cached field.
+     * One-time reflective dump of colour/drawable state across the tile's class
+     * hierarchy, to design the real fix if resetting the base isn't enough.
      */
-    private fun resolveInactiveColor(view: Any, classLoader: ClassLoader): Int? {
-        return try {
-            val ctx = XposedHelpers.callMethod(view, "getContext") as? Context ?: return null
-            val attrId = ctx.resources.getIdentifier("shadeInactive", "attr", "com.android.systemui")
-            if (attrId == 0) return null
-            val utils = XposedHelpers.findClassIfExists(SETTINGS_UTILS, classLoader) ?: return null
-            XposedHelpers.callStaticMethod(utils, "getColorAttrDefaultColor", ctx, attrId) as? Int
+    private fun dumpColorState(view: Any) {
+        try {
+            XposedBridge.log("${MainHook.TAG} QsTileColorHooks: DUMP for ${view.javaClass.name}")
+            var c: Class<*>? = view.javaClass
+            while (c != null && c != Any::class.java) {
+                for (f in c.declaredFields) {
+                    try {
+                        val type = f.type
+                        val isInt = type == Int::class.javaPrimitiveType
+                        val nameL = type.name.lowercase()
+                        val interesting = isInt ||
+                            nameL.contains("drawable") ||
+                            nameL.contains("color")
+                        if (!interesting) continue
+                        f.isAccessible = true
+                        val v = f.get(view)
+                        val shown = if (isInt && v is Int) hex(v) else (v?.javaClass?.name ?: "null")
+                        XposedBridge.log("${MainHook.TAG}   ${c.simpleName}.${f.name}: ${type.simpleName} = $shown")
+                    } catch (_: Throwable) {
+                        // skip unreadable field
+                    }
+                }
+                c = c.superclass
+            }
         } catch (_: Throwable) {
-            null
+            // silent
         }
     }
 
