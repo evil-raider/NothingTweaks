@@ -1,11 +1,15 @@
 package com.souleven.nothingos.hooks
 
+import android.animation.Animator
 import android.view.View
 import com.souleven.nothingos.MainHook
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.lang.reflect.Field
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * Fixes the Nothing OS Quick Settings bug where inactive tiles turn grey-blue
@@ -13,23 +17,27 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
  *
  * ROOT CAUSE (proven by on-device field logging):
  *  - The visible inactive fill is Nothing's `colorUnderCover`; it recovers to
- *    the correct light value (#FFE8E7EF) on its own after a theme switch.
- *  - The actual glitch is the base `backgroundColor`. For an inactive tile it
- *    must settle to `colorInactive` (#00000000, transparent) so the white
- *    undercover shows through. But when a theme change (updateResources) lands
- *    mid tile-fade, the backgroundColor animation is interrupted and FREEZES at
- *    an intermediate semi-transparent grey (observed #99C6C6CD). That frozen
- *    grey sits on top of the white undercover -> the tile looks grey.
- *  - Tapping the tile starts a fresh animation that finishes at transparent,
- *    which is why a tap always "fixed" it.
+ *    the correct light value on its own after a theme switch.
+ *  - The glitch is the base `backgroundColor`. For an inactive tile it must
+ *    settle to `colorInactive` (#00000000, transparent) so the white undercover
+ *    shows through. The tile animates backgroundColor via a reused ValueAnimator
+ *    (AOSP `singleAnimator`). When a theme change (updateResources) lands mid
+ *    fade, that animation is cancelled and backgroundColor FREEZES at an
+ *    intermediate semi-transparent grey (observed #99C6C6CD), which sits over
+ *    the white undercover -> the tile looks grey. Tapping starts a fresh
+ *    animation that finishes at transparent, which is why a tap always fixed it.
  *
- * FIX:
- *  - After each inactive state change we wait SETTLE_DELAY_MS (long enough for a
- *    legitimate fade to finish) and then check the base again. If it still has
- *    not settled to colorInactive, the animation froze -> we call setColor with
- *    colorInactive to snap it to the correct transparent base.
- *  - Normal taps are untouched: their fade completes within the delay, so the
- *    deferred check finds the base already settled and does nothing.
+ * FIX (event-driven, no timers):
+ *  - We listen to the tile's colour animator. `onAnimationEnd` fires both on a
+ *    natural finish and on cancel. When it fires, if the tile is inactive and
+ *    its base has not reached colorInactive, the fade was interrupted -> we snap
+ *    the base to colorInactive. A normal fade ends exactly at colorInactive, so
+ *    the check is a no-op and animations are never cut short.
+ *  - The animator is found by TYPE (any Animator field), not by name, so this
+ *    survives ROM renames. We attach our listener at most once per animator
+ *    instance (tracked in a weak set).
+ *  - If no animation is running when a state change lands, the colours are
+ *    already final, so we run the same correction immediately.
  *  - We only ever write colorInactive (the tile's own resting colour), never a
  *    resolved theme attribute, so this cannot paint tiles black.
  *
@@ -41,9 +49,6 @@ class QsTileColorHooks : HookModule {
         const val PREF_KEY = "pref_fix_qs_tile_color"
         const val STATE_INACTIVE = 1
         const val QS_TILE_VIEW = "com.android.systemui.qs.tileimpl.QSTileViewImpl"
-        // Long enough that a real tile fade has finished; short enough to be
-        // imperceptible when correcting a frozen tile.
-        const val SETTLE_DELAY_MS = 450L
         const val CORRECTION_LOG_LIMIT = 20
 
         @Volatile
@@ -51,6 +56,13 @@ class QsTileColorHooks : HookModule {
 
         @Volatile
         var correctionLogs = 0
+
+        // Animator fields per tile class (found by type once), and the set of
+        // animator instances we already listen to. Everything here runs on the
+        // SystemUI main thread, so no extra synchronisation is needed.
+        val animatorFieldsCache = HashMap<Class<*>, List<Field>>()
+        val listenedAnimators: MutableSet<Animator> =
+            Collections.newSetFromMap(WeakHashMap<Animator, Boolean>())
     }
 
     override fun handleLoadPackage(lpparam: LoadPackageParam, prefs: Prefs) {
@@ -87,47 +99,84 @@ class QsTileColorHooks : HookModule {
                 XposedBridge.log("${MainHook.TAG} QsTileColorHooks: hook firing on ${view.javaClass.name}")
             }
 
-            if (readInt(view, "lastState") != STATE_INACTIVE) return
+            var anyRunning = false
+            for (animator in collectAnimators(view)) {
+                attachListenerOnce(view, animator)
+                if (animator.isRunning) anyRunning = true
+            }
 
-            val target = readIntOrNull(view, "colorInactive") ?: return
-            val current = readIntOrNull(view, "backgroundColor") ?: return
-            // Already at the resting inactive colour -> nothing to watch.
-            if (current == target) return
-
-            // The base is mid-transition (a normal fade) or frozen. Re-check
-            // after the fade should have finished; only then decide.
-            view.postDelayed({ settleInactiveBase(view) }, SETTLE_DELAY_MS)
+            // With no animation in flight the colours are already final, so a
+            // stale/frozen inactive base can be corrected right now.
+            if (!anyRunning) correctInactiveBase(view, "static")
         } catch (_: Throwable) {
             // silent: never crash SystemUI
         }
     }
 
-    private fun settleInactiveBase(view: View) {
+    private fun collectAnimators(view: View): List<Animator> {
+        val fields = animatorFieldsCache.getOrPut(view.javaClass) {
+            val list = ArrayList<Field>()
+            var c: Class<*>? = view.javaClass
+            while (c != null && c != Any::class.java) {
+                for (f in c.declaredFields) {
+                    if (Animator::class.java.isAssignableFrom(f.type)) {
+                        try {
+                            f.isAccessible = true
+                            list.add(f)
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+                c = c.superclass
+            }
+            list
+        }
+        val result = ArrayList<Animator>()
+        for (f in fields) {
+            try {
+                (f.get(view) as? Animator)?.let { result.add(it) }
+            } catch (_: Throwable) {
+            }
+        }
+        return result
+    }
+
+    private fun attachListenerOnce(view: View, animator: Animator) {
+        if (!listenedAnimators.add(animator)) return
         try {
-            // Tile may have become active again in the meantime.
-            if (readInt(view, "lastState") != STATE_INACTIVE) return
+            animator.addListener(object : Animator.AnimatorListener {
+                override fun onAnimationEnd(animation: Animator) = correctInactiveBase(view, "anim-end")
+                override fun onAnimationCancel(animation: Animator) { /* onAnimationEnd follows */ }
+                override fun onAnimationStart(animation: Animator) {}
+                override fun onAnimationRepeat(animation: Animator) {}
+            })
+        } catch (_: Throwable) {
+            listenedAnimators.remove(animator)
+        }
+    }
+
+    private fun correctInactiveBase(view: View, reason: String) {
+        try {
+            if (readIntOrNull(view, "lastState") != STATE_INACTIVE) return
 
             val target = readIntOrNull(view, "colorInactive") ?: return
             val current = readIntOrNull(view, "backgroundColor") ?: return
-            // The fade finished correctly on its own -> leave it alone.
+            // Fade reached its intended resting colour -> leave it alone.
             if (current == target) return
 
-            // Still off-target after the fade window: the animation froze.
-            // Snap the base to the tile's own resting inactive colour.
+            // Inactive tile whose base never settled -> interrupted fade. Snap it.
             XposedHelpers.callMethod(view, "setColor", target)
 
             if (correctionLogs < CORRECTION_LOG_LIMIT) {
                 correctionLogs++
                 XposedBridge.log(
-                    "${MainHook.TAG} QsTileColorHooks: settled frozen inactive base ${hex(current)} -> ${hex(target)}"
+                    "${MainHook.TAG} QsTileColorHooks: settled inactive base ${hex(current)} -> ${hex(target)} ($reason)"
                 )
             }
         } catch (_: Throwable) {
             // silent
         }
     }
-
-    private fun readInt(view: Any, name: String): Int = XposedHelpers.getIntField(view, name)
 
     private fun readIntOrNull(view: Any, name: String): Int? = try {
         XposedHelpers.getIntField(view, name)
