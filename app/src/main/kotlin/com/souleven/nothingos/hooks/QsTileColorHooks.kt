@@ -1,5 +1,6 @@
 package com.souleven.nothingos.hooks
 
+import android.view.View
 import com.souleven.nothingos.MainHook
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -7,30 +8,32 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 /**
- * DIAGNOSTIC (observe-only) build for the Nothing OS Quick Settings colour bug.
+ * Fixes the Nothing OS Quick Settings bug where inactive tiles turn grey-blue
+ * after a theme switch (e.g. battery-saver dark theme -> back to light).
  *
- * On-device field dump (Nothing Phone 3a, tiles white / working state) showed:
- *   colorInactive          = #00000000  (stock inactive base is TRANSPARENT)
- *   backgroundColor        = #00000000  (matches colorInactive at rest)
- *   colorActive            = #FFFFFFFF
- *   colorUnderCover        = #FFE8E7EF  (opaque light -> the visible inactive fill)
- *   backgroundOverlayColor = #14E1E2EC  (very low alpha sheen)
- *   backgroundUndercoverDrawable = LayerDrawable
+ * ROOT CAUSE (proven by on-device field logging):
+ *  - The visible inactive fill is Nothing's `colorUnderCover`; it recovers to
+ *    the correct light value (#FFE8E7EF) on its own after a theme switch.
+ *  - The actual glitch is the base `backgroundColor`. For an inactive tile it
+ *    must settle to `colorInactive` (#00000000, transparent) so the white
+ *    undercover shows through. But when a theme change (updateResources) lands
+ *    mid tile-fade, the backgroundColor animation is interrupted and FREEZES at
+ *    an intermediate semi-transparent grey (observed #99C6C6CD). That frozen
+ *    grey sits on top of the white undercover -> the tile looks grey.
+ *  - Tapping the tile starts a fresh animation that finishes at transparent,
+ *    which is why a tap always "fixed" it.
  *
- * Conclusion: the visible inactive tile fill is Nothing's `colorUnderCover`
- * (painted on backgroundUndercoverDrawable), NOT the base backgroundColor.
- * Re-asserting backgroundColor could never fix the grey-blue revert, and
- * forcing a resolved theme colour turned tiles black. Both approaches dropped.
+ * FIX:
+ *  - After each inactive state change we wait SETTLE_DELAY_MS (long enough for a
+ *    legitimate fade to finish) and then check the base again. If it still has
+ *    not settled to colorInactive, the animation froze -> we call setColor with
+ *    colorInactive to snap it to the correct transparent base.
+ *  - Normal taps are untouched: their fade completes within the delay, so the
+ *    deferred check finds the base already settled and does nothing.
+ *  - We only ever write colorInactive (the tile's own resting colour), never a
+ *    resolved theme attribute, so this cannot paint tiles black.
  *
- * This build does NOT modify anything. It only:
- *   1. Logs the watched inactive colour fields whenever they change, so the
- *      exact field + value of the grey-blue state is captured when the bug
- *      reproduces.
- *   2. One-time dumps colour/cover/background/tint/state method signatures of
- *      the Nothing tile classes, so we learn which method re-applies the fill.
- *
- * Zero regression risk: tiles behave exactly like stock (white, with the
- * intermittent grey-blue still possible) until we ship the targeted fix.
+ * All reflection is wrapped in try/catch -> silent no-op on ROM mismatch.
  */
 class QsTileColorHooks : HookModule {
 
@@ -38,28 +41,16 @@ class QsTileColorHooks : HookModule {
         const val PREF_KEY = "pref_fix_qs_tile_color"
         const val STATE_INACTIVE = 1
         const val QS_TILE_VIEW = "com.android.systemui.qs.tileimpl.QSTileViewImpl"
-        const val SNAPSHOT_LOG_LIMIT = 80
-
-        val WATCH_FIELDS = arrayOf(
-            "colorInactive",
-            "backgroundColor",
-            "colorUnderCover",
-            "backgroundOverlayColor",
-            "overlayColorInactive",
-            "colorUnavailable"
-        )
+        // Long enough that a real tile fade has finished; short enough to be
+        // imperceptible when correcting a frozen tile.
+        const val SETTLE_DELAY_MS = 450L
+        const val CORRECTION_LOG_LIMIT = 20
 
         @Volatile
         var firingLogged = false
 
         @Volatile
-        var methodsDumped = false
-
-        @Volatile
-        var lastSnapshot: String? = null
-
-        @Volatile
-        var snapshotLogs = 0
+        var correctionLogs = 0
     }
 
     override fun handleLoadPackage(lpparam: LoadPackageParam, prefs: Prefs) {
@@ -73,7 +64,7 @@ class QsTileColorHooks : HookModule {
 
         val hook = object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                observe(param.thisObject)
+                onStateChange(param.thisObject)
             }
         }
 
@@ -85,72 +76,63 @@ class QsTileColorHooks : HookModule {
                 XposedBridge.log("${MainHook.TAG} QsTileColorHooks: $method hook failed: ${t.message}")
             }
         }
-        XposedBridge.log("${MainHook.TAG} QsTileColorHooks: [diag] installed $installed hook(s) on ${cls.name}")
+        XposedBridge.log("${MainHook.TAG} QsTileColorHooks: installed $installed hook(s) on ${cls.name}")
     }
 
-    private fun observe(view: Any?) {
-        if (view == null) return
+    private fun onStateChange(obj: Any?) {
+        val view = obj as? View ?: return
         try {
             if (!firingLogged) {
                 firingLogged = true
-                XposedBridge.log("${MainHook.TAG} QsTileColorHooks: [diag] firing on ${view.javaClass.name}")
-            }
-            if (!methodsDumped) {
-                methodsDumped = true
-                dumpMethods(view)
+                XposedBridge.log("${MainHook.TAG} QsTileColorHooks: hook firing on ${view.javaClass.name}")
             }
 
-            val lastState = try {
-                XposedHelpers.getIntField(view, "lastState")
-            } catch (_: Throwable) {
-                return
-            }
-            if (lastState != STATE_INACTIVE) return
+            if (readInt(view, "lastState") != STATE_INACTIVE) return
 
-            val sb = StringBuilder()
-            for (name in WATCH_FIELDS) {
-                val value = try {
-                    hex(XposedHelpers.getIntField(view, name))
-                } catch (_: Throwable) {
-                    "n/a"
-                }
-                if (sb.isNotEmpty()) sb.append("  ")
-                sb.append(name).append('=').append(value)
-            }
-            val snapshot = sb.toString()
+            val target = readIntOrNull(view, "colorInactive") ?: return
+            val current = readIntOrNull(view, "backgroundColor") ?: return
+            // Already at the resting inactive colour -> nothing to watch.
+            if (current == target) return
 
-            if (snapshot != lastSnapshot && snapshotLogs < SNAPSHOT_LOG_LIMIT) {
-                lastSnapshot = snapshot
-                snapshotLogs++
-                XposedBridge.log("${MainHook.TAG} QsTileColorHooks: [diag] inactive $snapshot")
-            }
+            // The base is mid-transition (a normal fade) or frozen. Re-check
+            // after the fade should have finished; only then decide.
+            view.postDelayed({ settleInactiveBase(view) }, SETTLE_DELAY_MS)
         } catch (_: Throwable) {
             // silent: never crash SystemUI
         }
     }
 
-    /** One-time dump of colour/cover/background/tint/state methods on the tile classes. */
-    private fun dumpMethods(view: Any) {
+    private fun settleInactiveBase(view: View) {
         try {
-            var c: Class<*>? = view.javaClass
-            while (c != null && c != Any::class.java) {
-                val cn = c.name
-                if (cn.contains("TwinButtonsTileView") || cn.contains("QSTileViewImpl")) {
-                    for (m in c.declaredMethods) {
-                        val ml = m.name.lowercase()
-                        val interesting = ml.contains("color") || ml.contains("cover") ||
-                            ml.contains("background") || ml.contains("tint") ||
-                            ml.contains("resource") || ml.contains("state")
-                        if (!interesting) continue
-                        val params = m.parameterTypes.joinToString(",") { it.simpleName }
-                        XposedBridge.log("${MainHook.TAG}   method ${c.simpleName}.${m.name}($params)")
-                    }
-                }
-                c = c.superclass
+            // Tile may have become active again in the meantime.
+            if (readInt(view, "lastState") != STATE_INACTIVE) return
+
+            val target = readIntOrNull(view, "colorInactive") ?: return
+            val current = readIntOrNull(view, "backgroundColor") ?: return
+            // The fade finished correctly on its own -> leave it alone.
+            if (current == target) return
+
+            // Still off-target after the fade window: the animation froze.
+            // Snap the base to the tile's own resting inactive colour.
+            XposedHelpers.callMethod(view, "setColor", target)
+
+            if (correctionLogs < CORRECTION_LOG_LIMIT) {
+                correctionLogs++
+                XposedBridge.log(
+                    "${MainHook.TAG} QsTileColorHooks: settled frozen inactive base ${hex(current)} -> ${hex(target)}"
+                )
             }
         } catch (_: Throwable) {
             // silent
         }
+    }
+
+    private fun readInt(view: Any, name: String): Int = XposedHelpers.getIntField(view, name)
+
+    private fun readIntOrNull(view: Any, name: String): Int? = try {
+        XposedHelpers.getIntField(view, name)
+    } catch (_: Throwable) {
+        null
     }
 
     private fun hex(color: Int): String = "#%08X".format(color)
