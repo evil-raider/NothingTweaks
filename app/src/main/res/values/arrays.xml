@@ -18,4 +18,45 @@
         <item>720p</item>
         <item>1080p60fps</item>
     </string-array>
+
+    <string-array name="tt_label_mode_entries">
+        <item>@string/tt_label_full</item>
+        <item>@string/tt_label_short</item>
+    </string-array>
+    <string-array name="tt_label_mode_values" translatable="false">
+        <item>full</item>
+        <item>short</item>
+    </string-array>
+
+    <string-array name="tt_label_len_values" translatable="false">
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+
+    <string-array name="tt_position_entries">
+        <item>@string/tt_pos_default</item>
+        <item>@string/tt_pos_below</item>
+        <item>@string/tt_pos_above_right</item>
+        <item>@string/tt_pos_below_right</item>
+    </string-array>
+    <string-array name="tt_position_values" translatable="false">
+        <item>default</item>
+        <item>below</item>
+        <item>above_right</item>
+        <item>below_right</item>
+    </string-array>
+
+    <string-array name="tt_feedback_entries">
+        <item>@string/tt_feedback_none</item>
+        <item>@string/tt_feedback_top</item>
+        <item>@string/tt_feedback_system</item>
+    </string-array>
+    <string-array name="tt_feedback_values" translatable="false">
+        <item>none</item>
+        <item>top</item>
+        <item>system</item>
+    </string-array>
 </resources>

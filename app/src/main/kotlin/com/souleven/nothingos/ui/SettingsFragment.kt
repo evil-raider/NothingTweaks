@@ -32,6 +32,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
 
         wireFingerprintDependencies()
+        wireTextToolbar()
 
         // Use the reusable reboot function for preferences that require a reboot
         requireRebootOnEnable("allow_180_rotation")
@@ -56,6 +57,19 @@ class SettingsFragment : PreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
         listView.isNestedScrollingEnabled = false
         listView.clipToPadding = false
+    }
+
+    private fun wireTextToolbar() {
+        findPreference<Preference>("tt_items_editor")?.setOnPreferenceClickListener {
+            preferenceManager.sharedPreferences?.let { prefs ->
+                TextToolbarDialogs.showItemsEditor(requireContext(), prefs)
+            }
+            true
+        }
+        findPreference<Preference>("tt_process_text_root")?.setOnPreferenceClickListener {
+            TextToolbarDialogs.showProcessTextManager(requireContext())
+            true
+        }
     }
 
     private fun wireFingerprintDependencies() {

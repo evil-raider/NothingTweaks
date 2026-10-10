@@ -122,4 +122,54 @@
     <string name="pref_temp_warning_bypass_desc">Отключает системные всплывающие уведомления о высокой температуре.</string>
     
     <string name="restart_txt">Перезагрузить</string>
+
+    <!-- Меню выделения текста -->
+    <string name="cat_text_toolbar">Меню выделения текста</string>
+    <string name="pref_tt_enabled">Настроить меню выделения текста</string>
+    <string name="pref_tt_enabled_desc">Работает только в приложениях, добавленных в область действия модуля в LSPosed (после добавления перезапустите приложение).</string>
+    <string name="pref_tt_items">Пункты меню и порядок</string>
+    <string name="pref_tt_items_desc">Порядок, скрытие и короткие подписи пунктов</string>
+    <string name="pref_tt_label_mode">Подписи кнопок</string>
+    <string name="pref_tt_label_len">Длина короткой подписи</string>
+    <string name="pref_tt_label_upper">Короткие подписи заглавными</string>
+    <string name="pref_tt_no_overflow">Показывать все пункты сразу</string>
+    <string name="pref_tt_no_overflow_desc">Без меню «⋮»: все пункты остаются на панели, кнопки сужаются, если не влезают</string>
+    <string name="pref_tt_position">Положение меню</string>
+    <string name="pref_tt_autocopy">Копировать при выделении</string>
+    <string name="pref_tt_autocopy_desc">Выделенный текст копируется автоматически. Только стандартные текстовые поля (не Chrome/WebView)</string>
+    <string name="pref_tt_autocopy_feedback">Уведомление о копировании</string>
+    <string name="pref_tt_pt">Отключить пункты приложений (root)</string>
+    <string name="pref_tt_pt_desc">Убрать «Перевести», «Поиск» и подобные пункты других приложений сразу везде, без области действия</string>
+
+    <string name="tt_label_full">Полный текст</string>
+    <string name="tt_label_short">Коротко (квадратные кнопки)</string>
+    <string name="tt_pos_default">Как в системе</string>
+    <string name="tt_pos_below">Под выделением</string>
+    <string name="tt_pos_above_right">Сверху, у правого края</string>
+    <string name="tt_pos_below_right">Снизу, у правого края</string>
+    <string name="tt_feedback_none">Нет</string>
+    <string name="tt_feedback_top">Небольшой тост сверху</string>
+    <string name="tt_feedback_system">Системная плашка буфера</string>
+
+    <string name="tt_items_title">Пункты меню</string>
+    <string name="tt_items_hint">Галочка — показывать пункт. Стрелки — порядок. Нажмите на название, чтобы задать короткую подпись. Пункты не из списка идут после них в системном порядке.</string>
+    <string name="tt_reset">Сбросить</string>
+    <string name="tt_move_up">Выше</string>
+    <string name="tt_move_down">Ниже</string>
+    <string name="tt_label_title">Короткая подпись: %1$s</string>
+    <string name="tt_label_hint">Пусто = автоматически</string>
+    <string name="tt_item_assist">Умное действие (звонок, карта, перевод…)</string>
+    <string name="tt_item_assist_secondary">Дополнительные умные действия</string>
+    <string name="tt_item_cut">Вырезать</string>
+    <string name="tt_item_copy">Копировать</string>
+    <string name="tt_item_paste">Вставить</string>
+    <string name="tt_item_paste_plain">Вставить как обычный текст</string>
+    <string name="tt_item_share">Поделиться</string>
+    <string name="tt_item_select_all">Выбрать всё</string>
+    <string name="tt_item_replace">Заменить</string>
+    <string name="tt_item_autofill">Автозаполнение</string>
+    <string name="tt_pt_title">Пункты приложений в меню</string>
+    <string name="tt_pt_empty">Нет приложений, добавляющих пункты в меню текста</string>
+    <string name="tt_pt_done">Готово</string>
+    <string name="tt_pt_failed">Ошибка: нет root-доступа?</string>
 </resources>
