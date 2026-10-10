@@ -12,6 +12,7 @@ object TextToolbarKeys {
     const val LABEL_MODE = "tt_label_mode"          // full | short
     const val LABEL_LEN = "tt_label_len"            // "1".."8"
     const val LABEL_UPPER = "tt_label_upper"
+    const val LABEL_LINES = "tt_label_lines"        // "1" | "2"
     const val NO_OVERFLOW = "tt_no_overflow"
     const val POSITION = "tt_position"              // default | below | above_right | below_right
     const val AUTOCOPY = "tt_autocopy"

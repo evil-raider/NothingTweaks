@@ -119,9 +119,31 @@ class TextToolbarHooks : HookModule {
             android.R.id.autofill -> return K.ITEM_AUTOFILL
         }
         if (item.groupId == android.R.id.textAssist) return K.ITEM_ASSIST_SECONDARY
+        // Chrome / WebView use their own resource ids (select_action_menu_copy, ...).
+        appIdKey(item.itemId)?.let { return it }
         // Fallback for apps that build the menu with their own ids (e.g. Chromium/WebView).
         val title = item.title?.toString()?.trim() ?: return null
         return systemTitleMap()[title]
+    }
+
+    private val appIdCache = HashMap<Int, String?>()
+
+    private fun appIdKey(id: Int): String? {
+        if (id == 0 || id == -1) return null
+        return appIdCache.getOrPut(id) {
+            val name = runCatching {
+                android.app.AndroidAppHelper.currentApplication()?.resources?.getResourceEntryName(id)
+            }.getOrNull()?.lowercase() ?: return@getOrPut null
+            when {
+                name.endsWith("paste_as_plain_text") -> K.ITEM_PASTE_PLAIN
+                name.endsWith("_copy") -> K.ITEM_COPY
+                name.endsWith("_cut") -> K.ITEM_CUT
+                name.endsWith("_paste") -> K.ITEM_PASTE
+                name.endsWith("_select_all") -> K.ITEM_SELECT_ALL
+                name.endsWith("_share") -> K.ITEM_SHARE
+                else -> null
+            }
+        }
     }
 
     private fun systemTitleMap(): Map<String, String> {
@@ -247,14 +269,31 @@ class TextToolbarHooks : HookModule {
         })
     }
 
+    private fun twoLines() = prefs.getString(K.LABEL_LINES, "1") == "2"
+
+    /**
+     * Short label. One line: first N letters of the first word ("ВСТА").
+     * Two lines: one word is split into two chunks ("ВСТА\nВИТЬ"), several words give
+     * first + last word ("ВСТА\nТЕКС"). Custom labels may use "|" as a line break.
+     */
     private fun shortLabel(item: MenuItem): String {
-        keyOf(item)?.let { key -> customLabels()[key]?.let { return it } }
+        val upper = prefs.getBoolean(K.LABEL_UPPER, true)
+        fun finish(label: String) = if (upper) label.uppercase() else label
+        keyOf(item)?.let { key ->
+            customLabels()[key]?.let { return finish(it.replace("|", "\n")) }
+        }
         val len = prefs.getString(K.LABEL_LEN, "4").toIntOrNull()?.coerceIn(1, 8) ?: 4
         val title = item.title?.toString().orEmpty()
             .replace("\u2026", "").replace("...", "").trim()
-        val firstWord = title.split(Regex("\\s+")).firstOrNull().orEmpty()
-        val label = firstWord.take(len)
-        return if (prefs.getBoolean(K.LABEL_UPPER, true)) label.uppercase() else label
+        val words = title.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val first = words.firstOrNull().orEmpty()
+        if (!twoLines()) return finish(first.take(len))
+        val label = when {
+            words.size >= 2 -> first.take(len) + "\n" + words.last().take(len)
+            first.length > len -> first.take(len) + "\n" + first.drop(len).take(len)
+            else -> first
+        }
+        return finish(label)
     }
 
     private fun styleShortButton(button: View, item: MenuItem, showIcon: Boolean, textId: Int) {
@@ -268,6 +307,14 @@ class TextToolbarHooks : HookModule {
                 visibility = View.VISIBLE
                 this.text = shortLabel(item)
                 setPaddingRelative(0, 0, 0, 0)
+                if (this.text.contains('\n')) {
+                    isSingleLine = false
+                    maxLines = 2
+                    setLineSpacing(0f, 0.9f)
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
+                    gravity = Gravity.CENTER
+                    ellipsize = null
+                }
             }
         }
         val pad = (4 * dm.density).toInt()

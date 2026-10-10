@@ -153,7 +153,7 @@
     <string name="tt_feedback_system">System clipboard overlay</string>
 
     <string name="tt_items_title">Menu items</string>
-    <string name="tt_items_hint">Checkbox: show item. Arrows: order. Tap a name to set its short label. Items not listed keep the system order after these.</string>
+    <string name="tt_items_hint">Checkbox: show item. Arrows: order. Tap a name to set its short label (use | for a line break). Items not listed keep the system order after these.</string>
     <string name="tt_reset">Reset</string>
     <string name="tt_move_up">Move up</string>
     <string name="tt_move_down">Move down</string>
@@ -173,4 +173,7 @@
     <string name="tt_pt_empty">No apps add items to the text menu</string>
     <string name="tt_pt_done">Done</string>
     <string name="tt_pt_failed">Failed: root access denied?</string>
+    <string name="pref_tt_label_lines">Short label lines</string>
+    <string name="tt_lines_1">One line (ВСТА)</string>
+    <string name="tt_lines_2">Two lines (ВСТА / ВИТЬ)</string>
 </resources>

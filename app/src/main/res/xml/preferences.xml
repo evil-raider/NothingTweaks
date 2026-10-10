@@ -268,6 +268,16 @@
             app:dependency="tt_enabled"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            app:key="tt_label_lines"
+            app:title="@string/pref_tt_label_lines"
+            app:entries="@array/tt_lines_entries"
+            app:entryValues="@array/tt_lines_values"
+            app:defaultValue="1"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
         <SwitchPreferenceCompat
             app:key="tt_label_upper"
             app:title="@string/pref_tt_label_upper"

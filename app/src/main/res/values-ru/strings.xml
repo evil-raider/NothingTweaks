@@ -152,7 +152,7 @@
     <string name="tt_feedback_system">Системная плашка буфера</string>
 
     <string name="tt_items_title">Пункты меню</string>
-    <string name="tt_items_hint">Галочка — показывать пункт. Стрелки — порядок. Нажмите на название, чтобы задать короткую подпись. Пункты не из списка идут после них в системном порядке.</string>
+    <string name="tt_items_hint">Галочка — показывать пункт. Стрелки — порядок. Нажмите на название, чтобы задать короткую подпись (| — перенос строки). Пункты не из списка идут после них в системном порядке.</string>
     <string name="tt_reset">Сбросить</string>
     <string name="tt_move_up">Выше</string>
     <string name="tt_move_down">Ниже</string>
@@ -172,4 +172,7 @@
     <string name="tt_pt_empty">Нет приложений, добавляющих пункты в меню текста</string>
     <string name="tt_pt_done">Готово</string>
     <string name="tt_pt_failed">Ошибка: нет root-доступа?</string>
+    <string name="pref_tt_label_lines">Строк в короткой подписи</string>
+    <string name="tt_lines_1">Одна (ВСТА)</string>
+    <string name="tt_lines_2">Две (ВСТА / ВИТЬ)</string>
 </resources>
