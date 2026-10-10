@@ -176,4 +176,13 @@
     <string name="pref_tt_label_lines">Short label lines</string>
     <string name="tt_lines_1">One line (ВСТА)</string>
     <string name="tt_lines_2">Two lines (ВСТА / ВИТЬ)</string>
+    <string name="pref_tt_label_size">Short label text size</string>
+    <string name="tt_size_auto">Auto (13 sp for two lines)</string>
+    <string name="cat_text_toolbar_exp">Text selection menu: experimental</string>
+    <string name="pref_tt_exp_menu_autocopy">Copy on selection in Chrome / WebView</string>
+    <string name="pref_tt_exp_menu_autocopy_desc">Presses the app\'s own Copy item and keeps the menu open. Requires \"Copy on selection\"</string>
+    <string name="pref_tt_exp_telegram">Telegram and forks</string>
+    <string name="pref_tt_exp_telegram_desc">Applies order, labels, position and auto-copy to Telegram\'s own selection menu (messages)</string>
+    <string name="pref_tt_debug">Debug log</string>
+    <string name="pref_tt_debug_desc">Write menu items and hook status to the LSPosed log</string>
 </resources>

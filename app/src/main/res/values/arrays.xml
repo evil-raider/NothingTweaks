@@ -67,4 +67,22 @@
         <item>1</item>
         <item>2</item>
     </string-array>
+    <string-array name="tt_size_entries">
+        <item>@string/tt_size_auto</item>
+        <item>11 sp</item>
+        <item>12 sp</item>
+        <item>13 sp</item>
+        <item>14 sp</item>
+        <item>15 sp</item>
+        <item>16 sp</item>
+    </string-array>
+    <string-array name="tt_size_values" translatable="false">
+        <item>auto</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item>14</item>
+        <item>15</item>
+        <item>16</item>
+    </string-array>
 </resources>

@@ -278,6 +278,16 @@
             app:dependency="tt_enabled"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            app:key="tt_label_size"
+            app:title="@string/pref_tt_label_size"
+            app:entries="@array/tt_size_entries"
+            app:entryValues="@array/tt_size_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
         <SwitchPreferenceCompat
             app:key="tt_label_upper"
             app:title="@string/pref_tt_label_upper"
@@ -325,6 +335,34 @@
             app:key="tt_process_text_root"
             app:title="@string/pref_tt_pt"
             app:summary="@string/pref_tt_pt_desc"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="@string/cat_text_toolbar_exp"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="tt_exp_menu_autocopy"
+            app:title="@string/pref_tt_exp_menu_autocopy"
+            app:summary="@string/pref_tt_exp_menu_autocopy_desc"
+            app:defaultValue="false"
+            app:dependency="tt_autocopy"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="tt_exp_telegram"
+            app:title="@string/pref_tt_exp_telegram"
+            app:summary="@string/pref_tt_exp_telegram_desc"
+            app:defaultValue="false"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="tt_debug"
+            app:title="@string/pref_tt_debug"
+            app:summary="@string/pref_tt_debug_desc"
+            app:defaultValue="false"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 

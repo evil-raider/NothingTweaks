@@ -175,4 +175,13 @@
     <string name="pref_tt_label_lines">Строк в короткой подписи</string>
     <string name="tt_lines_1">Одна (ВСТА)</string>
     <string name="tt_lines_2">Две (ВСТА / ВИТЬ)</string>
+    <string name="pref_tt_label_size">Размер шрифта коротких подписей</string>
+    <string name="tt_size_auto">Авто (13 sp для двух строк)</string>
+    <string name="cat_text_toolbar_exp">Меню выделения: эксперименты</string>
+    <string name="pref_tt_exp_menu_autocopy">Копировать при выделении в Chrome / WebView</string>
+    <string name="pref_tt_exp_menu_autocopy_desc">Нажимает собственный пункт «Копировать» приложения и не даёт меню закрыться. Нужно «Копировать при выделении»</string>
+    <string name="pref_tt_exp_telegram">Telegram и форки</string>
+    <string name="pref_tt_exp_telegram_desc">Порядок, подписи, положение и автокопирование для собственного меню выделения Telegram (сообщения)</string>
+    <string name="pref_tt_debug">Отладочный лог</string>
+    <string name="pref_tt_debug_desc">Писать пункты меню и состояние хуков в лог LSPosed</string>
 </resources>
