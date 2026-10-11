@@ -8,22 +8,21 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.util.Collections
 
 /**
  * SystemUI side of auto-copy: hides the clipboard overlay (Android 13+) for text that was
  * copied automatically by [TextToolbarHooks], unless the user chose the system feedback.
+ *
+ * Nothing OS does not use the AOSP ClipboardListener class name, so instead of hooking a
+ * fixed class we hook whatever listener SystemUI registers with ClipboardManager.
  */
 class AutoCopyOverlayHooks : HookModule {
 
-    override fun handleLoadPackage(lpparam: LoadPackageParam, prefs: Prefs) {
-        val listener = XposedHelpers.findClassIfExists(
-            "com.android.systemui.clipboardoverlay.ClipboardListener", lpparam.classLoader
-        ) ?: run {
-            XposedBridge.log("NothingTweaks: ClipboardListener not found, overlay suppression disabled")
-            return
-        }
+    private val hookedClasses = Collections.synchronizedSet(HashSet<Class<*>>())
 
-        XposedBridge.hookAllMethods(listener, "onPrimaryClipChanged", object : XC_MethodHook() {
+    override fun handleLoadPackage(lpparam: LoadPackageParam, prefs: Prefs) {
+        val suppress = object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 if (!prefs.getBoolean(K.ENABLED, false) || !prefs.getBoolean(K.AUTOCOPY, false)) return
                 if (prefs.getString(K.AUTOCOPY_FEEDBACK, K.FEEDBACK_TOP) == K.FEEDBACK_SYSTEM) return
@@ -37,6 +36,30 @@ class AutoCopyOverlayHooks : HookModule {
                 } catch (t: Throwable) {
                     XposedBridge.log("NothingTweaks: overlay suppression failed: ${t.message}")
                 }
+            }
+        }
+
+        fun hookListenerClass(cls: Class<*>) {
+            if (!hookedClasses.add(cls)) return
+            try {
+                val m = cls.getMethod("onPrimaryClipChanged")
+                XposedBridge.hookMethod(m, suppress)
+                XposedBridge.log("NothingTweaks: clipboard overlay listener hooked: ${cls.name}")
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingTweaks: cannot hook clipboard listener ${cls.name}: ${t.message}")
+            }
+        }
+
+        // AOSP class, if present.
+        XposedHelpers.findClassIfExists(
+            "com.android.systemui.clipboardoverlay.ClipboardListener", lpparam.classLoader
+        )?.let { hookListenerClass(it) }
+
+        // Any clipboard listener SystemUI registers (covers Nothing's own classes).
+        XposedBridge.hookAllMethods(ClipboardManager::class.java, "addPrimaryClipChangedListener", object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                val listener = param.args.getOrNull(0) ?: return
+                hookListenerClass(listener.javaClass)
             }
         })
     }
