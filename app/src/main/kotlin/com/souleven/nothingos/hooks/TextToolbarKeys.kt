@@ -14,9 +14,6 @@ object TextToolbarKeys {
     const val LABEL_UPPER = "tt_label_upper"
     const val LABEL_LINES = "tt_label_lines"        // "1" | "2"
     const val LABEL_SIZE = "tt_label_size"          // "auto" | "11".."16" (sp)
-    const val DEBUG = "tt_debug"
-    const val EXP_MENU_AUTOCOPY = "tt_exp_menu_autocopy" // Chrome / WebView auto-copy via the menu
-    const val EXP_TELEGRAM = "tt_exp_telegram"           // Telegram (and forks) own toolbar
     const val NO_OVERFLOW = "tt_no_overflow"
     const val POSITION = "tt_position"              // default | below | above_right | below_right
     const val AUTOCOPY = "tt_autocopy"
