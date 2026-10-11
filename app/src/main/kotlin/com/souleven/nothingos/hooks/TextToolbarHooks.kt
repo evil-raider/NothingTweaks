@@ -55,6 +55,8 @@ class TextToolbarHooks : HookModule {
         private const val TG_FT_CLASS = "org.telegram.ui.ActionBar.FloatingToolbar"
         private const val TG_POPUP_CLASS = "org.telegram.ui.ActionBar.FloatingToolbar\$FloatingToolbarPopup"
         private const val TG_SELECTION_HELPER = "org.telegram.ui.Cells.TextSelectionHelper"
+        private const val TG_MARKER_CLASS = "org.telegram.messenger.AndroidUtilities"
+        private const val MENU_ITEM_IMPL = "com.android.internal.view.menu.MenuItemImpl"
         private const val AUTOCOPY_DELAY_MS = 350L
         private const val MENU_COPY_WINDOW_MS = 1500L
         private const val TOAST_DURATION_MS = 1300L
@@ -90,6 +92,9 @@ class TextToolbarHooks : HookModule {
         safe("menuAutocopy") { hookMenuAutoCopy() }
         if (XposedHelpers.findClassIfExists(TG_FT_CLASS, lpparam.classLoader) != null) {
             safe("telegram") { hookTelegram(lpparam.classLoader) }
+        } else if (XposedHelpers.findClassIfExists(TG_MARKER_CLASS, lpparam.classLoader) != null) {
+            // Obfuscated fork (e.g. Plus Messenger): work on the framework MenuItem level.
+            safe("telegramGeneric") { hookTelegramGeneric() }
         }
         debug { "hooks installed in ${lpparam.packageName}" }
     }
@@ -349,18 +354,18 @@ class TextToolbarHooks : HookModule {
      * Two lines: one word is split into two chunks ("ВСТА\nВИТЬ"), several words give
      * first + last word ("ВСТА\nТЕКС"). Custom labels may use "|" as a line break.
      */
-    private fun shortLabel(item: MenuItem): String {
+    private fun shortLabel(item: MenuItem, oneLine: Boolean = false): String {
         val upper = prefs.getBoolean(K.LABEL_UPPER, true)
         fun finish(label: String) = if (upper) label.uppercase() else label
         keyOf(item)?.let { key ->
-            customLabels()[key]?.let { return finish(it.replace("|", "\n")) }
+            customLabels()[key]?.let { return finish(it.replace("|", if (oneLine) "" else "\n")) }
         }
         val len = prefs.getString(K.LABEL_LEN, "4").toIntOrNull()?.coerceIn(1, 8) ?: 4
         val title = item.title?.toString().orEmpty()
             .replace("\u2026", "").replace("...", "").trim()
         val words = title.split(Regex("\\s+")).filter { it.isNotEmpty() }
         val first = words.firstOrNull().orEmpty()
-        if (!twoLines()) return finish(first.take(len))
+        if (oneLine || !twoLines()) return finish(first.take(len))
         val label = when {
             words.size >= 2 -> first.take(len) + "\n" + words.last().take(len)
             first.length > len -> first.take(len) + "\n" + first.drop(len).take(len)
@@ -814,6 +819,63 @@ class TextToolbarHooks : HookModule {
             debug { "telegram TextSelectionHelper not found (obfuscated fork?)" }
         }
         debug { "telegram hooks installed" }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // 7. EXPERIMENTAL: obfuscated Telegram forks (Plus Messenger, ...)
+    //    Their toolbar classes are renamed, but the menu itself is a framework MenuBuilder
+    //    (PopupMenu.getMenu()). Order = getOrder(), hidden = isVisible(), short label = getTitle().
+    //    Position / no-overflow / two-line labels are not available this way.
+    // ---------------------------------------------------------------------------------------
+
+    private var inOriginalTitle = false
+
+    private fun isTextMenuItem(item: Any): Boolean {
+        val menu = runCatching { XposedHelpers.getObjectField(item, "mMenu") as? Menu }.getOrNull() ?: return false
+        return menu.findItem(android.R.id.copy) != null || menu.findItem(android.R.id.paste) != null ||
+            menu.findItem(android.R.id.selectAll) != null
+    }
+
+    private fun hookTelegramGeneric() {
+        val cls = XposedHelpers.findClass(MENU_ITEM_IMPL, null)
+
+        XposedHelpers.findAndHookMethod(cls, "getOrder", object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                if (inOriginalTitle || !telegramOn() || !isTextMenuItem(param.thisObject)) return
+                val item = param.thisObject as MenuItem
+                val original = param.result as Int
+                val key = withOriginalTitle { keyOf(item) }
+                param.result = key?.let { rank()[it] } ?: (1000 + original)
+            }
+        })
+
+        XposedHelpers.findAndHookMethod(cls, "isVisible", object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                if (param.result != true || inOriginalTitle || !telegramOn()) return
+                if (!isTextMenuItem(param.thisObject)) return
+                val key = withOriginalTitle { keyOf(param.thisObject as MenuItem) } ?: return
+                if (key in hidden()) param.result = false
+            }
+        })
+
+        XposedHelpers.findAndHookMethod(cls, "getTitle", object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                if (inOriginalTitle || !telegramOn() || !shortLabels()) return
+                if (!isTextMenuItem(param.thisObject)) return
+                param.result = withOriginalTitle { shortLabel(param.thisObject as MenuItem, oneLine = true) }
+            }
+        })
+        debug { "telegram (generic MenuItem) hooks installed" }
+    }
+
+    private inline fun <T> withOriginalTitle(block: () -> T): T {
+        val prev = inOriginalTitle
+        inOriginalTitle = true
+        try {
+            return block()
+        } finally {
+            inOriginalTitle = prev
+        }
     }
 
     private inline fun safe(name: String, block: () -> Unit) {
