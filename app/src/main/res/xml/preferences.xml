@@ -243,6 +243,96 @@
 
 
     <PreferenceCategory
+        app:title="@string/cat_text_toolbar"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="tt_enabled"
+            app:title="@string/pref_tt_enabled"
+            app:summary="@string/pref_tt_enabled_desc"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="tt_items_editor"
+            app:title="@string/pref_tt_items"
+            app:summary="@string/pref_tt_items_desc"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="tt_label_mode"
+            app:title="@string/pref_tt_label_mode"
+            app:entries="@array/tt_label_mode_entries"
+            app:entryValues="@array/tt_label_mode_values"
+            app:defaultValue="full"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="tt_label_len"
+            app:title="@string/pref_tt_label_len"
+            app:entries="@array/tt_label_len_values"
+            app:entryValues="@array/tt_label_len_values"
+            app:defaultValue="4"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="tt_label_lines"
+            app:title="@string/pref_tt_label_lines"
+            app:entries="@array/tt_lines_entries"
+            app:entryValues="@array/tt_lines_values"
+            app:defaultValue="1"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="tt_label_size"
+            app:title="@string/pref_tt_label_size"
+            app:entries="@array/tt_size_entries"
+            app:entryValues="@array/tt_size_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="tt_label_upper"
+            app:title="@string/pref_tt_label_upper"
+            app:defaultValue="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="tt_no_overflow"
+            app:title="@string/pref_tt_no_overflow"
+            app:summary="@string/pref_tt_no_overflow_desc"
+            app:defaultValue="false"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="tt_position"
+            app:title="@string/pref_tt_position"
+            app:entries="@array/tt_position_entries"
+            app:entryValues="@array/tt_position_values"
+            app:defaultValue="default"
+            app:useSimpleSummaryProvider="true"
+            app:dependency="tt_enabled"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="tt_process_text_root"
+            app:title="@string/pref_tt_pt"
+            app:summary="@string/pref_tt_pt_desc"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:title="@string/category_system"
         app:iconSpaceReserved="false">
         <SwitchPreferenceCompat

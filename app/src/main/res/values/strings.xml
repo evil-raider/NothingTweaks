@@ -130,4 +130,53 @@
     
     <string name="restart_txt">Restart</string>
 
+
+    <!-- Text selection toolbar -->
+    <string name="cat_text_toolbar">Text selection menu</string>
+    <string name="pref_tt_enabled">Customise text selection menu</string>
+    <string name="pref_tt_enabled_desc">Works only in apps added to the module scope in LSPosed (restart the app after adding it).</string>
+    <string name="pref_tt_items">Menu items and order</string>
+    <string name="pref_tt_items_desc">Reorder, hide or rename the items</string>
+    <string name="pref_tt_label_mode">Button labels</string>
+    <string name="pref_tt_label_len">Short label length</string>
+    <string name="pref_tt_label_upper">Uppercase short labels</string>
+    <string name="pref_tt_no_overflow">Show all items at once</string>
+    <string name="pref_tt_no_overflow_desc">No \"⋮\" overflow menu: every item stays in the bar, buttons shrink if they do not fit</string>
+    <string name="pref_tt_position">Menu position</string>
+    <string name="pref_tt_pt">Disable app items (root)</string>
+    <string name="pref_tt_pt_desc">Disable \"Translate\", \"Search\" and similar items of other apps in every app, no scope needed</string>
+
+    <string name="tt_label_full">Full text</string>
+    <string name="tt_label_short">Short (square buttons)</string>
+    <string name="tt_pos_default">System default</string>
+    <string name="tt_pos_below">Below the selection</string>
+    <string name="tt_pos_above_right">Above, on the right edge</string>
+    <string name="tt_pos_below_right">Below, on the right edge</string>
+
+    <string name="tt_items_title">Menu items</string>
+    <string name="tt_items_hint">Checkbox: show item. Arrows: order. Tap a name to set its short label (use | for a line break). Items not listed keep the system order after these.</string>
+    <string name="tt_reset">Reset</string>
+    <string name="tt_move_up">Move up</string>
+    <string name="tt_move_down">Move down</string>
+    <string name="tt_label_title">Short label: %1$s</string>
+    <string name="tt_label_hint">Empty = automatic</string>
+    <string name="tt_item_assist">Smart action (call, map, translate…)</string>
+    <string name="tt_item_assist_secondary">Additional smart actions</string>
+    <string name="tt_item_cut">Cut</string>
+    <string name="tt_item_copy">Copy</string>
+    <string name="tt_item_paste">Paste</string>
+    <string name="tt_item_paste_plain">Paste as plain text</string>
+    <string name="tt_item_share">Share</string>
+    <string name="tt_item_select_all">Select all</string>
+    <string name="tt_item_replace">Replace</string>
+    <string name="tt_item_autofill">Autofill</string>
+    <string name="tt_pt_title">App items in the menu</string>
+    <string name="tt_pt_empty">No apps add items to the text menu</string>
+    <string name="tt_pt_done">Done</string>
+    <string name="tt_pt_failed">Failed: root access denied?</string>
+    <string name="pref_tt_label_lines">Short label lines</string>
+    <string name="tt_lines_1">One line (ВСТА)</string>
+    <string name="tt_lines_2">Two lines (ВСТА / ВИТЬ)</string>
+    <string name="pref_tt_label_size">Short label text size</string>
+    <string name="tt_size_auto">Auto (13 sp for two lines)</string>
 </resources>

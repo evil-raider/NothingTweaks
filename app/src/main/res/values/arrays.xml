@@ -18,4 +18,61 @@
         <item>720p</item>
         <item>1080p60fps</item>
     </string-array>
+
+    <string-array name="tt_label_mode_entries">
+        <item>@string/tt_label_full</item>
+        <item>@string/tt_label_short</item>
+    </string-array>
+    <string-array name="tt_label_mode_values" translatable="false">
+        <item>full</item>
+        <item>short</item>
+    </string-array>
+
+    <string-array name="tt_label_len_values" translatable="false">
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+
+    <string-array name="tt_position_entries">
+        <item>@string/tt_pos_default</item>
+        <item>@string/tt_pos_below</item>
+        <item>@string/tt_pos_above_right</item>
+        <item>@string/tt_pos_below_right</item>
+    </string-array>
+    <string-array name="tt_position_values" translatable="false">
+        <item>default</item>
+        <item>below</item>
+        <item>above_right</item>
+        <item>below_right</item>
+    </string-array>
+
+    <string-array name="tt_lines_entries">
+        <item>@string/tt_lines_1</item>
+        <item>@string/tt_lines_2</item>
+    </string-array>
+    <string-array name="tt_lines_values" translatable="false">
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+    <string-array name="tt_size_entries">
+        <item>@string/tt_size_auto</item>
+        <item>11 sp</item>
+        <item>12 sp</item>
+        <item>13 sp</item>
+        <item>14 sp</item>
+        <item>15 sp</item>
+        <item>16 sp</item>
+    </string-array>
+    <string-array name="tt_size_values" translatable="false">
+        <item>auto</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item>14</item>
+        <item>15</item>
+        <item>16</item>
+    </string-array>
 </resources>
