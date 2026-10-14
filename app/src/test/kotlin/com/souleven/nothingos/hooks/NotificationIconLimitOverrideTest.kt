@@ -7,6 +7,7 @@ import org.junit.Test
 class NotificationIconLimitOverrideTest {
     open class Container {
         @JvmField var mIsStaticLayout = true
+        @JvmField var mSpeedBumpIndex = 4
         @JvmField var mMaxIcons = 4
         @JvmField var mMaxStaticIcons = 4
         @JvmField var mMaxIconsOnAod = 3
@@ -152,6 +153,62 @@ class NotificationIconLimitOverrideTest {
         c.mMaxIcons = 4
         limiter.apply(c, 9)
         assertEquals(listOf("mMaxIcons:4->9"), resets)
+    }
+
+    @Test fun quietNotificationThresholdDoesNotCapExplicitLimit() {
+        val c = Container()
+        val limiter = NotificationIconLimitOverride(Container::class.java)
+        limiter.apply(c, 8)
+        assertLimits(c, 8, 8, 8, 8)
+        assertEquals(-1, c.mSpeedBumpIndex)
+        // The legacy SystemUI predicate also checks this independently of maxVisibleIcons.
+        val fifthIconOverflows = (c.mSpeedBumpIndex != -1 && 4 >= c.mSpeedBumpIndex) || 4 >= c.mMaxIcons
+        assertEquals(false, fifthIconOverflows)
+    }
+
+    @Test fun speedBumpSetterAndDirectWritesAreRepaired() {
+        val c = Container()
+        val limiter = NotificationIconLimitOverride(Container::class.java)
+        limiter.apply(c, 8)
+        repeat(20) {
+            c.mSpeedBumpIndex = 4
+            limiter.apply(c, 8, setOf("mSpeedBumpIndex"))
+            assertEquals(-1, c.mSpeedBumpIndex)
+            c.mSpeedBumpIndex = 3
+            limiter.apply(c, 8)
+            assertEquals(-1, c.mSpeedBumpIndex)
+        }
+        limiter.apply(c, null)
+        assertEquals(3, c.mSpeedBumpIndex)
+    }
+
+    @Test fun clearingSettingRestoresQuietThreshold() {
+        val c = Container()
+        val limiter = NotificationIconLimitOverride(Container::class.java)
+        limiter.apply(c, 8)
+        limiter.apply(c, null)
+        assertEquals(4, c.mSpeedBumpIndex)
+        assertLimits(c, 4, 4, 3, 4)
+    }
+
+    @Test fun shelfKeepsQuietThresholdAndAllIcons() {
+        val c = Container().apply { mIsStaticLayout = false }
+        val limiter = NotificationIconLimitOverride(Container::class.java)
+        limiter.apply(c, 8)
+        assertEquals(4, c.mSpeedBumpIndex)
+        assertLimits(c, 4, 4, 3, 4)
+        c.mIsStaticLayout = true
+        limiter.apply(c, 8)
+        c.mIsStaticLayout = false
+        limiter.apply(c, 8)
+        assertEquals(4, c.mSpeedBumpIndex)
+    }
+
+    @Test fun blankSettingDoesNotAlterAnyStockThreshold() {
+        val c = Container()
+        NotificationIconLimitOverride(Container::class.java).apply(c, null)
+        assertEquals(4, c.mSpeedBumpIndex)
+        assertLimits(c, 4, 4, 3, 4)
     }
 
     @Test fun parsesBlankInvalidNegativeAndWhitespace() {

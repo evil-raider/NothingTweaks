@@ -1,58 +1,103 @@
 package com.souleven.nothingos.hooks
 
+import android.view.View
+import android.view.ViewGroup
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import de.robv.android.xposed.callbacks.XCallback
+import java.util.WeakHashMap
 
 class NotificationIconHooks : HookModule {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam, prefs: Prefs) {
         val containerClass = XposedHelpers.findClassIfExists(
             "com.android.systemui.statusbar.phone.NotificationIconContainer", lpparam.classLoader
         ) ?: run {
-            log("NotificationIconContainer not found in ${lpparam.processName}")
+            // Later callbacks can refer to a plugin's different class loader. This does not
+            // remove hooks already installed in the original SystemUI class loader.
+            log("Skipping loader without NotificationIconContainer in ${lpparam.processName}")
             return
         }
         val reportedResets = mutableSetOf<String>()
         val limiter = NotificationIconLimitOverride(containerClass) { field, observed, requested ->
-            // One entry per field/process, not a flood on every notification animation frame.
-            if (reportedResets.add(field)) log("Reasserting $field: observed=$observed requested=$requested")
+            if (reportedResets.add("$field:$observed:$requested")) {
+                log("Reasserting $field: observed=$observed requested=$requested")
+            }
         }
         if (limiter.fieldNames.isEmpty()) {
             log("No supported icon-limit fields found; override disabled")
             return
         }
-        var loggedLimit: Int? = null
+        var loggedSetting: String? = null
         var failureLogged = false
+        val snapshots = WeakHashMap<Any, MutableSet<String>>()
+
+        fun readLimit(): Int? {
+            val raw = prefs.getString("pref_max_notif_icons", "")
+            val limit = NotificationIconLimitOverride.parseLimit(raw)
+            val setting = when {
+                raw.isBlank() -> "unset (stock)"
+                limit == null -> "invalid (stock)"
+                else -> limit.toString()
+            }
+            // Log blank/invalid initial state too, not just changes to a numeric value.
+            if (setting != loggedSetting) {
+                log("setting=$setting; fields=${limiter.fieldNames.joinToString()}")
+                loggedSetting = setting
+            }
+            return limit
+        }
+
+        fun reportFailure(t: Throwable) {
+            if (!failureLogged) {
+                failureLogged = true
+                log("Could not apply/inspect icon limit: $t")
+                XposedBridge.log(t)
+            }
+        }
 
         fun apply(container: Any, refreshed: Set<String> = emptySet()) {
             try {
-                val limit = NotificationIconLimitOverride.parseLimit(
-                    prefs.getString("pref_max_notif_icons", "")
-                )
-                limiter.apply(container, limit, refreshed)
-                if (limit != loggedLimit) {
-                    log("limit=${limit ?: "stock"}; fields=${limiter.fieldNames.joinToString()}")
-                    loggedLimit = limit
-                }
+                limiter.apply(container, readLimit(), refreshed)
             } catch (t: Throwable) {
-                // A renamed OEM field must not crash SystemUI on every layout pass.
-                if (!failureLogged) {
-                    failureLogged = true
-                    log("Could not apply icon limit: $t")
-                    XposedBridge.log(t)
-                }
+                reportFailure(t)
+            }
+        }
+
+        fun snapshot(container: Any) {
+            try {
+                val view = container as? ViewGroup ?: return
+                if (!limiter.isStatic(container) || view.childCount < 5) return
+                fun field(name: String): Any? = runCatching {
+                    XposedHelpers.getObjectField(container, name)
+                }.getOrNull()
+                val id = if (view.id == View.NO_ID) "no_id" else runCatching {
+                    view.resources.getResourceEntryName(view.id)
+                }.getOrDefault(view.id.toString())
+                val state = "id=$id children=${view.childCount} width=${view.width}" +
+                    " measured=${view.measuredWidth} actualWidth=${field("mActualLayoutWidth")}" +
+                    " iconSize=${field("mIconSize")} dot=${field("mIsShowingOverflowDot")}" +
+                    " static=${field("mIsStaticLayout")} lock=${field("mOnLockScreen")}" +
+                    " ${limiter.describe(container)}"
+                val seen = snapshots.getOrPut(container) { mutableSetOf() }
+                if (seen.size < 24 && seen.add(state)) log("Layout $state")
+            } catch (t: Throwable) {
+                reportFailure(t)
             }
         }
 
         fun hook(name: String, after: Boolean = false, refreshed: Set<String> = emptySet()): Int {
             return try {
-                XposedBridge.hookAllMethods(containerClass, name, object : XC_MethodHook() {
+                // LOWEST before-hooks run last, immediately before the real method, after
+                // normal-priority before-hooks from other modules (Iconify is also installed).
+                XposedBridge.hookAllMethods(containerClass, name, object : XC_MethodHook(XCallback.PRIORITY_LOWEST) {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         if (!after) apply(param.thisObject, refreshed)
                     }
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (after && !param.hasThrowable()) apply(param.thisObject, refreshed)
+                        if (param.hasThrowable()) return
+                        if (after) apply(param.thisObject, refreshed)
                     }
                 }).size
             } catch (t: Throwable) {
@@ -61,20 +106,30 @@ class NotificationIconHooks : HookModule {
             }
         }
 
-        // Keep the real setter intact: we need its stock value when the preference is cleared.
-        // This is only an early application point, NOT the sole enforcement point.
+        readLimit()
         val setter = hook("setMaxIconsAmount", after = true, refreshed = setOf("mMaxIcons"))
+        val speedBump = hook("setSpeedBumpIndex", after = true, refreshed = setOf("mSpeedBumpIndex"))
         val resources = hook("initResources", after = true, refreshed = setOf(
             "mMaxStaticIcons", "mMaxIconsOnAod", "mMaxIconsOnLockscreen"
         ))
-        // Reassert at the consumers of the fields. A setter/getIconLimit hook alone can be
-        // bypassed by OEM direct writes or ART inlining and misses the legacy static icon cap.
-        // Measure must use the same limit as translations, otherwise width stays at 4 + dot.
         val measure = hook("onMeasure")
         val layout = hook("onLayout")
         val translations = hook("calculateIconXTranslations")
-        log("Installed: setter=$setter resources=$resources measure=$measure layout=$layout translations=$translations; " +
-            "fields=${limiter.fieldNames.joinToString()}")
+        // Observe after icon states were applied, and after normal-priority after-hooks.
+        // Keep this separate from LOWEST before-hooks used for enforcement above.
+        val diagnostics = try {
+            XposedBridge.hookAllMethods(containerClass, "applyIconStates",
+                object : XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!param.hasThrowable()) snapshot(param.thisObject)
+                    }
+                }).size
+        } catch (t: Throwable) {
+            log("Could not hook layout diagnostics: $t")
+            0
+        }
+        log("Installed: setter=$setter speedBump=$speedBump resources=$resources " +
+            "measure=$measure layout=$layout translations=$translations diagnostics=$diagnostics; fields=${limiter.fieldNames.joinToString()}")
         if (measure == 0 || layout == 0 || translations == 0) log("WARNING: layout enforcement incomplete on this ROM")
     }
 

@@ -11,7 +11,7 @@ internal class NotificationIconLimitOverride(
     private data class Value(var stock: Int, var applied: Int)
     private val values = WeakHashMap<Any, MutableMap<Field, Value>>()
     private val staticLayout = findField(containerClass, "mIsStaticLayout")
-    private val fields = listOf("mMaxIcons", "mMaxStaticIcons", "mMaxIconsOnAod", "mMaxIconsOnLockscreen")
+    private val fields = listOf("mMaxIcons", "mMaxStaticIcons", "mMaxIconsOnAod", "mMaxIconsOnLockscreen", "mSpeedBumpIndex")
         .mapNotNull { findField(containerClass, it) }
         .filter { it.type == Int::class.javaPrimitiveType }
 
@@ -25,26 +25,32 @@ internal class NotificationIconLimitOverride(
      *
      * Non-static containers are the notification shelf, not status bar/AOD. Never cap the shelf.
      */
+    fun isStatic(container: Any): Boolean = staticLayout?.getBoolean(container) != false
+
+    fun describe(container: Any): String = fields.joinToString { "${it.name}=${it.getInt(container)}" }
+
     fun apply(container: Any, limit: Int?, refreshedFields: Set<String> = emptySet()) {
-        val requested = limit?.takeIf { it >= 0 }
-            ?.takeUnless { staticLayout?.getBoolean(container) == false }
+        val requested = limit?.takeIf { it >= 0 }?.takeIf { isStatic(container) }
         val saved = values[container]
         if (requested == null && saved == null) return
         val state = saved ?: mutableMapOf<Field, Value>().also { values[container] = it }
         for (field in fields) {
+            // A quiet-notification speed bump is an independent overflow trigger, not a count.
+            // Suppress it only with an explicit limit, leaving the physical width check intact.
+            val target = requested?.let { if (field.name == "mSpeedBumpIndex") -1 else it }
             val current = field.getInt(container)
             val previous = state[field]
-            if (requested != null && previous != null && current != previous.applied &&
+            if (target != null && previous != null && current != previous.applied &&
                 field.name !in refreshedFields) {
-                onReset(field.name, current, requested)
+                onReset(field.name, current, target)
             }
             if (previous != null && (field.name in refreshedFields || current != previous.applied)) {
                 previous.stock = current
             }
-            if (requested != null) {
-                val value = previous ?: Value(current, requested).also { state[field] = it }
-                if (current != requested) field.setInt(container, requested)
-                value.applied = requested
+            if (target != null) {
+                val value = previous ?: Value(current, target).also { state[field] = it }
+                if (current != target) field.setInt(container, target)
+                value.applied = target
             } else if (previous != null) {
                 field.setInt(container, previous.stock)
             }

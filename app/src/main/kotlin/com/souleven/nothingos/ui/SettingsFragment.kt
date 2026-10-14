@@ -2,6 +2,10 @@ package com.souleven.nothingos.ui
 
 import android.content.Context
 import android.os.Bundle
+import android.text.InputType
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import com.souleven.nothingos.hooks.NotificationIconLimitOverride
 import android.view.View
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -33,6 +37,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         wireFingerprintDependencies()
         wireTextToolbar()
+        wireNotificationIconLimit()
 
         // Use the reusable reboot function for preferences that require a reboot
         requireRebootOnEnable("allow_180_rotation")
@@ -57,6 +62,31 @@ class SettingsFragment : PreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
         listView.isNestedScrollingEnabled = false
         listView.clipToPadding = false
+    }
+
+    private fun wireNotificationIconLimit() {
+        val pref = findPreference<EditTextPreference>("pref_max_notif_icons") ?: return
+        pref.summaryProvider = Preference.SummaryProvider<EditTextPreference> { item ->
+            val raw = item.text.orEmpty()
+            val limit = NotificationIconLimitOverride.parseLimit(raw)
+            val current = when {
+                raw.isBlank() -> getString(R.string.pref_max_notif_icons_stock)
+                limit == null -> getString(R.string.pref_max_notif_icons_invalid)
+                else -> getString(R.string.pref_max_notif_icons_current, limit)
+            }
+            getString(R.string.pref_max_notif_icons_summary) + "\n" + current
+        }
+        pref.setOnBindEditTextListener { edit ->
+            edit.inputType = InputType.TYPE_CLASS_NUMBER
+            edit.setSelectAllOnFocus(true)
+        }
+        pref.setOnPreferenceChangeListener { _, value ->
+            val raw = value as? String ?: return@setOnPreferenceChangeListener false
+            val valid = raw.isBlank() || NotificationIconLimitOverride.parseLimit(raw) != null
+            if (!valid) Toast.makeText(requireContext(),
+                R.string.pref_max_notif_icons_invalid, Toast.LENGTH_LONG).show()
+            valid
+        }
     }
 
     private fun wireTextToolbar() {
