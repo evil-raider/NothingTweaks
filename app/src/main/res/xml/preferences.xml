@@ -146,9 +146,21 @@
             app:key="pref_max_notif_icons"
             app:title="@string/pref_max_notif_icons_title"
             app:summary="@string/pref_max_notif_icons_summary"
-            app:dialogTitle="@string/pref_max_notif_icons_title"
+            app:dialogTitle="@string/pref_max_notif_icons_dialog_title"
             app:iconSpaceReserved="false"
             app:useSimpleSummaryProvider="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="@string/cat_quicksettings"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="pref_fix_qs_tile_color"
+            app:title="@string/pref_fix_qs_tile_color_title"
+            app:summary="@string/pref_fix_qs_tile_color_summary"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
     <PreferenceCategory

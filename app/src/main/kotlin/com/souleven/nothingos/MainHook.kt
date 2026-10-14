@@ -18,7 +18,7 @@ import com.souleven.nothingos.hooks.BackGestureKillHooks
 import com.souleven.nothingos.hooks.SystemFrameworkHooks
 import com.souleven.nothingos.hooks.NotificationIconHooks
 import com.souleven.nothingos.hooks.SpacingHooks
-import com.souleven.nothingos.hooks.TextToolbarHooks
+import com.souleven.nothingos.hooks.QsTileColorHooks
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XSharedPreferences
@@ -47,10 +47,7 @@ class MainHook : IXposedHookLoadPackage {
             "android",
             "com.google.android.inputmethod.latin"
         )
-        // Any other app is here only because the user added it to the module scope
-        // for the text selection toolbar tweaks.
-        val isCorePackage = lpparam.packageName in allowedPackages
-        if (!isCorePackage && !lpparam.isFirstApplication) return
+        if (lpparam.packageName !in allowedPackages) return
 
         val raw = try {
             XSharedPreferences(PKG_SELF, PREFS_NAME).apply {
@@ -82,16 +79,6 @@ class MainHook : IXposedHookLoadPackage {
             )
         }
 
-        if (!isCorePackage) {
-            try {
-                TextToolbarHooks().handleLoadPackage(lpparam, prefs)
-            } catch (t: Throwable) {
-                XposedBridge.log("$TAG ERROR in TextToolbarHooks: ${t.message}")
-                XposedBridge.log(t)
-            }
-            return
-        }
-
         if (lpparam.packageName == "android") {
             com.souleven.nothingos.hooks.SystemHooks.init(lpparam.classLoader, prefs)
         }
@@ -111,10 +98,7 @@ class MainHook : IXposedHookLoadPackage {
             hooks.add("BackGestureKillHooks" to BackGestureKillHooks())
             hooks.add("NotificationIconHooks" to NotificationIconHooks())
             hooks.add("SpacingHooks" to SpacingHooks())
-        }
-        if (lpparam.packageName != "android") {
-            // SystemUI, launcher and Gboard have text fields too.
-            hooks.add("TextToolbarHooks" to TextToolbarHooks())
+            hooks.add("QsTileColorHooks" to QsTileColorHooks())
         }
         hooks.add("NavBarHooks" to NavBarHooks())
         if (lpparam.packageName == "com.google.android.inputmethod.latin") {

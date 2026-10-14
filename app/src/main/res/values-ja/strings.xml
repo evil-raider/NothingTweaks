@@ -50,6 +50,7 @@
 
     <string name="pref_max_notif_icons_title">通知アイコンの制限</string>
     <string name="pref_max_notif_icons_summary">ステータスバーとAODに表示する通知アイコンの最大数。デフォルトのままにする場合は空白にしてください。</string>
+    <string name="pref_max_notif_icons_dialog_title">形式: X,Y (X=ステータスバー, Y=AOD)</string>
 
     <string name="pref_reduce_edge_padding_title">端の余白を減らす</string>
     <string name="pref_reduce_edge_padding_summary">ステータスバーの左右の端の空白部分を減らします。</string>
