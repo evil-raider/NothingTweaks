@@ -136,9 +136,6 @@
     <string name="pref_tt_no_overflow">Show all items at once</string>
     <string name="pref_tt_no_overflow_desc">No \"⋮\" overflow menu: every item stays in the bar, buttons shrink if they do not fit</string>
     <string name="pref_tt_position">Menu position</string>
-    <string name="pref_tt_autocopy">Copy on selection</string>
-    <string name="pref_tt_autocopy_desc">Selected text is copied automatically. Standard text fields only (not Chrome/WebView)</string>
-    <string name="pref_tt_autocopy_feedback">Copy notification</string>
     <string name="pref_tt_pt">Disable app items (root)</string>
     <string name="pref_tt_pt_desc">Disable \"Translate\", \"Search\" and similar items of other apps in every app, no scope needed</string>
 
@@ -148,9 +145,6 @@
     <string name="tt_pos_below">Below the selection</string>
     <string name="tt_pos_above_right">Above, on the right edge</string>
     <string name="tt_pos_below_right">Below, on the right edge</string>
-    <string name="tt_feedback_none">None</string>
-    <string name="tt_feedback_top">Small toast at the top</string>
-    <string name="tt_feedback_system">System clipboard overlay</string>
 
     <string name="tt_items_title">Menu items</string>
     <string name="tt_items_hint">Checkbox: show item. Arrows: order. Tap a name to set its short label (use | for a line break). Items not listed keep the system order after these.</string>

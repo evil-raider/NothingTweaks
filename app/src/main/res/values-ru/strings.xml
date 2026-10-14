@@ -135,9 +135,6 @@
     <string name="pref_tt_no_overflow">Показывать все пункты сразу</string>
     <string name="pref_tt_no_overflow_desc">Без меню «⋮»: все пункты остаются на панели, кнопки сужаются, если не влезают</string>
     <string name="pref_tt_position">Положение меню</string>
-    <string name="pref_tt_autocopy">Копировать при выделении</string>
-    <string name="pref_tt_autocopy_desc">Выделенный текст копируется автоматически. Только стандартные текстовые поля (не Chrome/WebView)</string>
-    <string name="pref_tt_autocopy_feedback">Уведомление о копировании</string>
     <string name="pref_tt_pt">Отключить пункты приложений (root)</string>
     <string name="pref_tt_pt_desc">Убрать «Перевести», «Поиск» и подобные пункты других приложений сразу везде, без области действия</string>
 
@@ -147,9 +144,6 @@
     <string name="tt_pos_below">Под выделением</string>
     <string name="tt_pos_above_right">Сверху, у правого края</string>
     <string name="tt_pos_below_right">Снизу, у правого края</string>
-    <string name="tt_feedback_none">Нет</string>
-    <string name="tt_feedback_top">Небольшой тост сверху</string>
-    <string name="tt_feedback_system">Системная плашка буфера</string>
 
     <string name="tt_items_title">Пункты меню</string>
     <string name="tt_items_hint">Галочка — показывать пункт. Стрелки — порядок. Нажмите на название, чтобы задать короткую подпись (| — перенос строки). Пункты не из списка идут после них в системном порядке.</string>

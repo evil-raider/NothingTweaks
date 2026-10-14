@@ -313,24 +313,6 @@
             app:dependency="tt_enabled"
             app:iconSpaceReserved="false" />
 
-        <SwitchPreferenceCompat
-            app:key="tt_autocopy"
-            app:title="@string/pref_tt_autocopy"
-            app:summary="@string/pref_tt_autocopy_desc"
-            app:defaultValue="false"
-            app:dependency="tt_enabled"
-            app:iconSpaceReserved="false" />
-
-        <ListPreference
-            app:key="tt_autocopy_feedback"
-            app:title="@string/pref_tt_autocopy_feedback"
-            app:entries="@array/tt_feedback_entries"
-            app:entryValues="@array/tt_feedback_values"
-            app:defaultValue="top"
-            app:useSimpleSummaryProvider="true"
-            app:dependency="tt_autocopy"
-            app:iconSpaceReserved="false" />
-
         <Preference
             app:key="tt_process_text_root"
             app:title="@string/pref_tt_pt"

@@ -19,7 +19,6 @@ import com.souleven.nothingos.hooks.SystemFrameworkHooks
 import com.souleven.nothingos.hooks.NotificationIconHooks
 import com.souleven.nothingos.hooks.SpacingHooks
 import com.souleven.nothingos.hooks.TextToolbarHooks
-import com.souleven.nothingos.hooks.AutoCopyOverlayHooks
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XSharedPreferences
@@ -112,7 +111,6 @@ class MainHook : IXposedHookLoadPackage {
             hooks.add("BackGestureKillHooks" to BackGestureKillHooks())
             hooks.add("NotificationIconHooks" to NotificationIconHooks())
             hooks.add("SpacingHooks" to SpacingHooks())
-            hooks.add("AutoCopyOverlayHooks" to AutoCopyOverlayHooks())
         }
         if (lpparam.packageName != "android") {
             // SystemUI, launcher and Gboard have text fields too.

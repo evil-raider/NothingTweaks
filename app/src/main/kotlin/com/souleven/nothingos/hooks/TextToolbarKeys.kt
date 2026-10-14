@@ -16,12 +16,6 @@ object TextToolbarKeys {
     const val LABEL_SIZE = "tt_label_size"          // "auto" | "11".."16" (sp)
     const val NO_OVERFLOW = "tt_no_overflow"
     const val POSITION = "tt_position"              // default | below | above_right | below_right
-    const val AUTOCOPY = "tt_autocopy"
-    const val AUTOCOPY_FEEDBACK = "tt_autocopy_feedback" // none | top | system
-
-    /** ClipData label used for auto-copied text, lets SystemUI recognise it. */
-    const val AUTOCOPY_CLIP_LABEL = "NothingTweaks:autocopy"
-
     const val LABEL_MODE_FULL = "full"
     const val LABEL_MODE_SHORT = "short"
 
@@ -30,9 +24,6 @@ object TextToolbarKeys {
     const val POSITION_ABOVE_RIGHT = "above_right"
     const val POSITION_BELOW_RIGHT = "below_right"
 
-    const val FEEDBACK_NONE = "none"
-    const val FEEDBACK_TOP = "top"
-    const val FEEDBACK_SYSTEM = "system"
 
     // Built-in items (system order)
     const val ITEM_ASSIST = "assist"

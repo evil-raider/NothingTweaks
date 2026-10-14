@@ -1,21 +1,14 @@
 package com.souleven.nothingos.hooks
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Point
 import android.graphics.Rect
-import android.graphics.drawable.GradientDrawable
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
@@ -25,7 +18,6 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import org.json.JSONObject
-import java.lang.ref.WeakReference
 import java.util.Locale
 
 /**
@@ -36,7 +28,7 @@ import java.util.Locale
  * in apps that are enabled in the module scope in LSPosed.
  *
  * Features: custom order, hidden items, short square labels, no overflow ("⋮"),
- * custom position, auto-copy on selection with an optional top "toast".
+ * custom position. Selection never writes to the clipboard; Copy remains an explicit action.
  */
 class TextToolbarHooks : HookModule {
 
@@ -44,16 +36,12 @@ class TextToolbarHooks : HookModule {
         private const val TAG = "NothingTweaks:TextToolbar"
         private const val FT_CLASS = "com.android.internal.widget.floatingtoolbar.FloatingToolbar"
         private const val POPUP_CLASS = "com.android.internal.widget.floatingtoolbar.LocalFloatingToolbarPopup"
-        private const val EDITOR_CB_CLASS = "android.widget.Editor\$TextActionModeCallback"
-        private const val AUTOCOPY_DELAY_MS = 350L
-        private const val TOAST_DURATION_MS = 1300L
 
         @Volatile
         private var installed = false
     }
 
     private lateinit var prefs: Prefs
-    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     /** True while LocalFloatingToolbarPopup.layoutMainPanelItems is running (UI thread only). */
     private var inMainPanelLayout = false
@@ -72,7 +60,6 @@ class TextToolbarHooks : HookModule {
         safe("doShow") { hookDoShow() }
         safe("layoutMainPanelItems") { hookMainPanelLayout() }
         safe("refreshCoordinates") { hookPosition() }
-        safe("autocopy") { hookAutoCopy() }
     }
 
     // ---------------------------------------------------------------------------------------
@@ -432,104 +419,6 @@ class TextToolbarHooks : HookModule {
             else -> return // keep the AOSP fallback
         }
         coords.y = (y - windowTop).coerceAtLeast(0)
-    }
-
-    // ---------------------------------------------------------------------------------------
-    // 4. Auto-copy on selection (TextView / EditText only)
-    // ---------------------------------------------------------------------------------------
-
-    private var pendingView: WeakReference<TextView>? = null
-    private var lastCopied: String? = null
-    private var toastWindow: PopupWindow? = null
-    private val copyRunnable = Runnable { doAutoCopy() }
-
-    private fun hookAutoCopy() {
-        val cbClass = XposedHelpers.findClass(EDITOR_CB_CLASS, null)
-
-        // Called on every toolbar (re)positioning, i.e. whenever the selection changes.
-        XposedBridge.hookAllMethods(cbClass, "onGetContentRect", object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!enabled() || !prefs.getBoolean(K.AUTOCOPY, false)) return
-                try {
-                    if (!XposedHelpers.getBooleanField(param.thisObject, "mHasSelection")) return
-                    val editor = XposedHelpers.getObjectField(param.thisObject, "this\$0")
-                    val tv = XposedHelpers.getObjectField(editor, "mTextView") as? TextView ?: return
-                    pendingView = WeakReference(tv)
-                    mainHandler.removeCallbacks(copyRunnable)
-                    mainHandler.postDelayed(copyRunnable, AUTOCOPY_DELAY_MS)
-                } catch (t: Throwable) {
-                    XposedBridge.log("$TAG autocopy schedule failed: ${t.message}")
-                }
-            }
-        })
-
-        XposedBridge.hookAllMethods(cbClass, "onDestroyActionMode", object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                mainHandler.removeCallbacks(copyRunnable)
-                pendingView = null
-                lastCopied = null
-            }
-        })
-    }
-
-    private fun doAutoCopy() {
-        val tv = pendingView?.get() ?: return
-        try {
-            if (!tv.isAttachedToWindow || !tv.hasSelection()) return
-            val canCopy = runCatching { XposedHelpers.callMethod(tv, "canCopy") as Boolean }
-                .getOrDefault(false) // false for password fields
-            if (!canCopy) return
-            val start = minOf(tv.selectionStart, tv.selectionEnd).coerceAtLeast(0)
-            val end = maxOf(tv.selectionStart, tv.selectionEnd).coerceAtMost(tv.text.length)
-            if (start >= end) return
-            val text = tv.text.subSequence(start, end).toString()
-            if (text == lastCopied) return
-            val cm = tv.context.getSystemService(ClipboardManager::class.java) ?: return
-            cm.setPrimaryClip(ClipData.newPlainText(K.AUTOCOPY_CLIP_LABEL, text))
-            lastCopied = text
-            if (prefs.getString(K.AUTOCOPY_FEEDBACK, K.FEEDBACK_TOP) == K.FEEDBACK_TOP) {
-                showTopToast(tv)
-            }
-        } catch (t: Throwable) {
-            XposedBridge.log("$TAG autocopy failed: ${t.message}")
-        }
-    }
-
-    /** Toast.setGravity() is ignored for text toasts on Android 11+, so draw our own. */
-    private fun showTopToast(anchor: View) {
-        val ctx = anchor.context
-        val density = ctx.resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
-
-        val label = if (ctx.resources.configuration.locales[0].language == "ru") "Скопировано" else "Copied"
-        val view = TextView(ctx).apply {
-            text = label
-            textSize = 13f
-            setTextColor(0xFFFFFFFF.toInt())
-            setPadding(dp(16), dp(8), dp(16), dp(8))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(20).toFloat()
-                setColor(0xE6202020.toInt())
-            }
-        }
-        toastWindow?.let { runCatching { it.dismiss() } }
-        val window = PopupWindow(view, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, false).apply {
-            isTouchable = false
-            isOutsideTouchable = false
-            animationStyle = android.R.style.Animation_Toast
-        }
-        val statusBar = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            anchor.rootWindowInsets?.getInsets(WindowInsets.Type.statusBars())?.top ?: 0
-        } else {
-            @Suppress("DEPRECATION")
-            anchor.rootWindowInsets?.systemWindowInsetTop ?: 0
-        }
-        window.showAtLocation(anchor.rootView, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, statusBar + dp(12))
-        toastWindow = window
-        mainHandler.postDelayed({
-            runCatching { window.dismiss() }
-            if (toastWindow === window) toastWindow = null
-        }, TOAST_DURATION_MS)
     }
 
     private inline fun safe(name: String, block: () -> Unit) {
