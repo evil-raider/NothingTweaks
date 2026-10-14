@@ -63,19 +63,9 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    private fun parseAt(raw: String, index: Int): Int? {
-        val parts = raw.split(",")
-        if (index >= parts.size) return null
-        val value = parts[index].trim().toIntOrNull() ?: return null
-        return value.takeIf { it in 1..50 }
-    }
+    private fun statusBarMax(prefs: Prefs): Int? = NotificationIconLimits.statusBar(rawMax(prefs))
 
-    private fun statusBarMax(prefs: Prefs): Int? = parseAt(rawMax(prefs), 0)
-
-    private fun aodMax(prefs: Prefs): Int? {
-        val raw = rawMax(prefs)
-        return parseAt(raw, 1) ?: parseAt(raw, 0)
-    }
+    private fun aodMax(prefs: Prefs): Int? = NotificationIconLimits.aod(rawMax(prefs))
 
     private fun setIntSafe(target: Any, field: String, value: Int) {
         try {
