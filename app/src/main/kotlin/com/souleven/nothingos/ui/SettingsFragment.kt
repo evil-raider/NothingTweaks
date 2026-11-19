@@ -48,12 +48,26 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         wireNetworkTrafficDependencies()
         wireBatteryCapDependencies()
         wirePowerButtonDependencies()
+        wireTextToolbar()
 
         requireRebootOnEnable("allow_180_rotation")
         requireRebootOnEnable("pref_advanced_power_menu")
         requireRebootOnEnable("pref_back_gesture_kill")
         requireRebootOnEnable("pref_disable_flag_secure")
         requireRebootOnEnable(PowerButtonHooks.KEY_CUSTOM_APP)
+    }
+
+    private fun wireTextToolbar() {
+        findPreference<Preference>("tt_items_editor")?.setOnPreferenceClickListener {
+            preferenceManager.sharedPreferences?.let { prefs ->
+                TextToolbarDialogs.showItemsEditor(requireContext(), prefs)
+            }
+            true
+        }
+        findPreference<Preference>("tt_process_text_root")?.setOnPreferenceClickListener {
+            TextToolbarDialogs.showProcessTextManager(requireContext())
+            true
+        }
     }
 
     override fun onResume() {
@@ -370,7 +384,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             editText.setSelection(editText.text!!.length)
         }
 
-        if (preference.key == "pref_max_notif_icons" || preference.key == "volume_panel_timeout") {
+        if (preference.key == "volume_panel_timeout") {
             editText.inputType = InputType.TYPE_CLASS_NUMBER
         } else {
             editText.inputType = InputType.TYPE_CLASS_TEXT

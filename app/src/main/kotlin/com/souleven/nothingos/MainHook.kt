@@ -29,6 +29,8 @@ import com.souleven.nothingos.hooks.PowerButtonHooks
 import com.souleven.nothingos.hooks.VolumeStepsHooks
 import com.souleven.nothingos.hooks.LauncherHooks
 import com.souleven.nothingos.hooks.StatusBarIconHooks
+import com.souleven.nothingos.hooks.QsTileColorHooks
+import com.souleven.nothingos.hooks.TextToolbarHooks
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
@@ -58,7 +60,10 @@ class MainHook : IXposedHookLoadPackage {
             "android",
             "com.google.android.inputmethod.latin"
         )
-        if (lpparam.packageName !in allowedPackages) return
+        // Any other app is here only because the user added it to the module scope
+        // for the text selection toolbar tweaks.
+        val isCorePackage = lpparam.packageName in allowedPackages
+        if (!isCorePackage && !lpparam.isFirstApplication) return
 
         val isSystemServer = lpparam.packageName == "android"
         val prefs = Prefs(isSystemServer = isSystemServer)
@@ -79,6 +84,16 @@ class MainHook : IXposedHookLoadPackage {
             } catch (t: Throwable) {
                 XposedBridge.log("$TAG Failed to hook callApplicationOnCreate: ${t.message}")
             }
+        }
+
+        if (!isCorePackage) {
+            try {
+                TextToolbarHooks().handleLoadPackage(lpparam, prefs)
+            } catch (t: Throwable) {
+                XposedBridge.log("$TAG ERROR in TextToolbarHooks: ${t.message}")
+                XposedBridge.log(t)
+            }
+            return
         }
 
         if (isSystemServer) {
@@ -105,6 +120,11 @@ class MainHook : IXposedHookLoadPackage {
             hooks.add("NetworkTrafficHooks" to NetworkTrafficHooks())
             hooks.add("PowerButtonHooks" to PowerButtonHooks())
             hooks.add("StatusBarIconHooks" to StatusBarIconHooks())
+            hooks.add("QsTileColorHooks" to QsTileColorHooks())
+        }
+        if (lpparam.packageName != "android") {
+            // SystemUI, launcher and Gboard have text fields too.
+            hooks.add("TextToolbarHooks" to TextToolbarHooks())
         }
         if (lpparam.packageName == PKG_SYSTEMUI || lpparam.packageName == PKG_LAUNCHER) {
             hooks.add("NavBarHooks" to NavBarHooks())
