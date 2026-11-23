@@ -212,15 +212,15 @@ class NotificationIconHooks : HookModule {
     private fun availableWidthBeforeCutout(container: ViewGroup): Float {
         if (container.layoutDirection == View.LAYOUT_DIRECTION_RTL) return -1f
         return try {
-            val cutoutId = container.resources.getIdentifier("cutout_space_view", "id", container.context.packageName)
-            if (cutoutId == 0) return -1f
-            val cutoutView = container.rootView?.findViewById<View>(cutoutId) ?: return -1f
-            if (cutoutView.visibility != View.VISIBLE || cutoutView.width <= 0) return -1f
+            val cutout = container.rootWindowInsets?.displayCutout ?: return -1f
+            val topRect = cutout.boundingRectTop
+            if (topRect.isEmpty) return -1f
+            val screenW = screenWidthOf(container)
+            // Нужен именно центральный вырез камеры сверху, не угловой (и не ландшафт без выреза сверху).
+            if (topRect.left <= 0 || topRect.right >= screenW) return -1f
             val cPos = IntArray(2)
-            val cutPos = IntArray(2)
             container.getLocationOnScreen(cPos)
-            cutoutView.getLocationOnScreen(cutPos)
-            val avail = (cutPos[0] - cPos[0]).toFloat()
+            val avail = (topRect.left - cPos[0]).toFloat()
             if (avail > 0f) avail else -1f
         } catch (_: Throwable) {
             -1f
