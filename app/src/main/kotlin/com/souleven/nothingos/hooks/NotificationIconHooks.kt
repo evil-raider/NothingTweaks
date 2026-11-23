@@ -39,9 +39,11 @@ class NotificationIconHooks : HookModule {
     private var enforcing = false
     private val lifecycleHooked = java.util.WeakHashMap<View, Boolean>()
 
-    // Кэш точки для дешёвого пер-кадрового удержания (без рефлексии/Prefs в горячем пути).
+    // Кэш точки и сжатых иконок для дешёвого пер-кадрового удержания (без рефлексии/Prefs в горячем пути).
     private var dotRef: WeakReference<View>? = null
     private var dotTargetX: Float = 0f
+    private var iconPositions: Array<Pair<WeakReference<View>, Float>> = emptyArray()
+    private var lastSbLogSig: String? = null
 
     private fun idName(v: View): String {
         return try {
@@ -207,7 +209,35 @@ class NotificationIconHooks : HookModule {
         }
     }
 
+    private fun availableWidthBeforeCutout(container: ViewGroup): Float {
+        if (container.layoutDirection == View.LAYOUT_DIRECTION_RTL) return -1f
+        return try {
+            val cutoutId = container.resources.getIdentifier("cutout_space_view", "id", container.context.packageName)
+            if (cutoutId == 0) return -1f
+            val cutoutView = container.rootView?.findViewById<View>(cutoutId) ?: return -1f
+            if (cutoutView.visibility != View.VISIBLE || cutoutView.width <= 0) return -1f
+            val cPos = IntArray(2)
+            val cutPos = IntArray(2)
+            container.getLocationOnScreen(cPos)
+            cutoutView.getLocationOnScreen(cutPos)
+            val avail = (cutPos[0] - cPos[0]).toFloat()
+            if (avail > 0f) avail else -1f
+        } catch (_: Throwable) {
+            -1f
+        }
+    }
+
+    private fun intFieldOr(obj: Any, field: String, fallback: Int): Int {
+        return try {
+            XposedHelpers.getIntField(obj, field).takeIf { it > 0 } ?: fallback
+        } catch (_: Throwable) {
+            fallback
+        }
+    }
+
     // Держит видимыми не более max иконок: лишнюю превращает в точку, остальные прячет.
+    // Если max иконок + точка не помещаются до выреза камеры, сжимает пустые промежутки
+    // между иконками так, чтобы и все иконки, и точка были видны левее камеры.
     // Запускается на layout-частоте (applyIconStates), не пер-кадрово.
     private fun enforceMax(container: ViewGroup, prefs: Prefs) {
         if (enforcing) return
@@ -215,17 +245,16 @@ class NotificationIconHooks : HookModule {
         try {
             val max = statusBarMax(prefs) ?: return
             val iconSize = iconSizeOf(container)
-            val targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
             val n = container.childCount
-            var shown = 0
+            val shownIcons = ArrayList<View>(max)
             var dotChild: View? = null
 
             for (i in 0 until n) {
                 val child = container.getChildAt(i) ?: continue
                 when (visibleStateOf(child)) {
                     STATE_ICON -> {
-                        if (shown < max) {
-                            shown += 1
+                        if (shownIcons.size < max) {
+                            shownIcons.add(child)
                         } else if (dotChild == null) {
                             setChildState(container, child, STATE_DOT)
                             dotChild = child
@@ -243,21 +272,105 @@ class NotificationIconHooks : HookModule {
                 }
             }
 
+            val shownCount = shownIcons.size
+            val sample = dotChild ?: shownIcons.firstOrNull()
+            val drawingSize = if (sample != null) {
+                intFieldOr(sample, "mStatusBarIconDrawingSize", (iconSize * 0.72f).toInt()).toFloat()
+            } else {
+                iconSize * 0.72f
+            }
+            val dotDrawOffset = if (sample != null) {
+                intFieldOr(sample, "mNewStatusBarIconSize", iconSize) / 2f
+            } else {
+                iconSize / 2f
+            }
+            val dotRadius = if (sample != null) {
+                intFieldOr(sample, "mStaticDotRadius", 8).toFloat()
+            } else {
+                8f
+            }
+
+            val availPx = availableWidthBeforeCutout(container)
+            val cutoutMargin = 6f
+            val dotGap = 8f
+            val dotExtra = if (dotChild != null) (dotGap + 2f * dotRadius) else 0f
+
+            var startX = 0f
+            var step = iconSize.toFloat()
+            var compacted = false
+
+            if (availPx > 0f && shownCount > 0) {
+                val uncompactedRight = (shownCount - 1) * iconSize + (iconSize + drawingSize) / 2f + dotExtra
+                if (uncompactedRight > availPx - cutoutMargin) {
+                    compacted = true
+                    startX = -((iconSize - drawingSize) / 4f).coerceAtLeast(0f)
+                    if (shownCount > 1) {
+                        val spaceForSteps = availPx - cutoutMargin - dotExtra - startX - (iconSize + drawingSize) / 2f
+                        step = (spaceForSteps / (shownCount - 1)).coerceIn(drawingSize + 2f, iconSize.toFloat())
+                    }
+                }
+            }
+
+            if (compacted) {
+                val posArr = Array(shownCount) { idx ->
+                    val child = shownIcons[idx]
+                    val x = startX + idx * step
+                    positionDot(container, child, x)
+                    WeakReference(child) to x
+                }
+                iconPositions = posArr
+            } else {
+                iconPositions = emptyArray()
+            }
+
             val dc = dotChild
+            var targetX = max * iconSize - iconSize / 2f + DOT_GAP_PX
             if (dc != null) {
+                if (compacted && shownCount > 0) {
+                    val lastIconRight = startX + (shownCount - 1) * step + (iconSize + drawingSize) / 2f
+                    targetX = lastIconRight + dotGap + dotRadius - dotDrawOffset
+                }
+                if (availPx > 0f) {
+                    val maxDotX = availPx - cutoutMargin - dotRadius - dotDrawOffset
+                    if (targetX > maxDotX) {
+                        targetX = maxDotX
+                    }
+                }
                 positionDot(container, dc, targetX)
                 dotRef = WeakReference(dc)
                 dotTargetX = targetX
             } else {
                 dotRef = null
             }
+
+            val logSig = "$max:$shownCount:${dc != null}:$iconSize:${drawingSize.toInt()}:${availPx.toInt()}:${step.toInt()}:${targetX.toInt()}:$compacted"
+            if (logSig != lastSbLogSig) {
+                lastSbLogSig = logSig
+                XposedBridge.log(
+                    "NothingTweaks: [NotificationIconHooks] sb max=$max shown=$shownCount hasDot=${dc != null} " +
+                        "iconSize=$iconSize drawSize=${drawingSize.toInt()} dotOff=${dotDrawOffset.toInt()} " +
+                        "avail=${availPx.toInt()} startX=${startX.toInt()} step=${step.toInt()} dotX=${targetX.toInt()} compact=$compacted"
+                )
+            }
         } finally {
             enforcing = false
         }
     }
 
-    // Пер-кадровый якорь: O(1), без рефлексии/Prefs, пока точка не сдвинулась.
+    // Пер-кадровый якорь: O(1), без рефлексии/Prefs, пока точка или сжатые иконки не сдвинулись.
     private fun holdDot() {
+        val positions = iconPositions
+        for (i in positions.indices) {
+            val entry = positions[i]
+            val v = entry.first.get() ?: continue
+            val tx = entry.second
+            if (v.translationX != tx) {
+                try {
+                    v.translationX = tx
+                } catch (_: Throwable) {
+                }
+            }
+        }
         val child = dotRef?.get() ?: return
         val target = dotTargetX
         if (child.translationX != target && visibleStateOf(child) == STATE_DOT) {
