@@ -298,10 +298,10 @@ class NotificationIconHooks : HookModule {
 
             val availPx = availableWidthBeforeCutout(container)
             val cutoutMargin = 8f
-            val dotGap = 11f
-            // Всегда резервируем место под точку, чтобы иконки стояли на одних и тех же
-            // позициях и не прыгали при появлении/исчезновении точки переполнения.
-            val dotReserve = dotGap + 2f * dotRadius
+            val dotGap = 7f
+            // Всегда резервируем фиксированное место под точку, чтобы иконки стояли на одних
+            // и тех же координатах и не прыгали при появлении/исчезновении точки переполнения.
+            val dotReserve = 11f + 2f * dotRadius
 
             val startX = 0f
             var step = iconSize.toFloat()
