@@ -9,28 +9,24 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import java.lang.ref.WeakReference
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 
 /**
- * Управляет иконками уведомлений в статусбаре:
+ * Управляет иконками уведомлений в статусбаре и на AOD:
  *  - лимит иконок берётся из pref "pref_max_notif_icons" в формате "статусбар,аод";
- *  - показывает не более N иконок, (N+1)-ю превращает в точку переполнения,
- *    остальные прячет;
- *  - точку прижимает вплотную к последней иконке и удерживает её пер-кадрово.
- *
- * ХРУПКИЕ ЗАВИСИМОСТИ (могут отвалиться при обновлении ROM/AOSP; всё в try/catch,
- * поэтому поломка проявится как «твик молча перестал работать»):
- *  - класс com.android.systemui.statusbar.phone.NotificationIconContainer;
- *  - id контейнера "notificationIcons";
- *  - поля mIconStates / mMaxStaticIcons / mMaxIcons / mActualLayoutWidth /
- *    mActualPaddingStart / mIconSize;
- *  - метод StatusBarIconView.getVisibleState()/setVisibleState().
+ *  - в статусбаре показывает не более N иконок, (N+1)-ю превращает в точку переполнения,
+ *    остальные прячет, при необходимости сжимая шаг иконок до выреза камеры;
+ *  - на AOD снимает ограничение Android 17 / Nothing OS 5 (max_notif_icons_on_aod = 5)
+ *    как для обычных, так и для центрированных часов.
  */
 class NotificationIconHooks : HookModule {
 
     private val DOT_ROOM_PX = 20
-    private val DOT_GAP_PX = 14         // зазор точки от края последней иконки; меньше = ближе, отрицательное = ещё ближе
-    private val BIND_HEADROOM = 20
+    private val DOT_GAP_PX = 14         // зазор точки от края последней иконки (без сжатия)
+    private val MIN_BIND_HEADROOM = 20
     private val ICON_SIZE_FALLBACK = 66
+    private val DEFAULT_AOD_SLOTS = 5
 
     private val STATE_ICON = 0
     private val STATE_DOT = 1
@@ -39,64 +35,239 @@ class NotificationIconHooks : HookModule {
     private var enforcing = false
     private val lifecycleHooked = java.util.WeakHashMap<View, Boolean>()
 
-    // Кэш точки и сжатых иконок для дешёвого пер-кадрового удержания (без рефлексии/Prefs в горячем пути).
+    // [P3] Кэш целочисленных resource ID контейнеров (0 = ещё не инициализирован, -1 = не найден).
+    @Volatile
+    private var notifIconsResId = 0
+    @Volatile
+    private var aodIconsResId = 0
+
+    // [P4] Кэш распарсенного значения настройки "pref_max_notif_icons", чтобы не делать split/toIntOrNull
+    // по 5 раз за один layout-проход.
+    @Volatile
+    private var cachedRawPref: String? = null
+    @Volatile
+    private var cachedSbMax: Int? = null
+    @Volatile
+    private var cachedAodMax: Int? = null
+
+    // [R1] Переиспользуемые буферы без аллокаций на каждом applyIconStates / OnPreDraw.
+    private val tmpLoc = IntArray(2)
+    private val tmpShownIcons = ArrayList<View>(32)
+    private var iconRefs: Array<WeakReference<View>?> = arrayOfNulls(16)
+    private var iconTargetsX: FloatArray = FloatArray(16)
+    private var compactedIconCount: Int = 0
+
+    // Кэш точки для дешёвого пер-кадрового удержания (без рефлексии/Prefs в горячем пути).
     private var dotRef: WeakReference<View>? = null
     private var dotTargetX: Float = 0f
-    private var iconPositions: Array<Pair<WeakReference<View>, Float>> = emptyArray()
-    private var lastSbLogSig: String? = null
 
-    private fun idName(v: View): String {
-        return try {
-            if (v.id != View.NO_ID) v.resources.getResourceEntryName(v.id) else "no-id"
-        } catch (_: Throwable) {
-            "res-error"
+    // [P1, P2] Закэшированные Field / Method для NotificationIconContainer, StatusBarIconView и IconState.
+    private var fLogTag: Field? = null
+    private var fIconSize: Field? = null
+    private var fIconStates: Field? = null
+    private var fMaxStaticIcons: Field? = null
+    private var fMaxIcons: Field? = null
+    private var fMaxIconsOnAod: Field? = null
+    private var fMaxIconsOnLockscreen: Field? = null
+    private var fActualLayoutWidth: Field? = null
+    private var fActualPaddingStart: Field? = null
+    private var fActualPaddingEnd: Field? = null
+    private var fFirstOverflowIndex: Field? = null
+    private var fIsShowingOverflowDot: Field? = null
+    private var fWasOverflowForced: Field? = null
+    private var fVisualOverflowStart: Field? = null
+    private var fFirstVisibleIconState: Field? = null
+    private var fLastVisibleIconState: Field? = null
+    private var fOverrideIconColor: Field? = null
+    private var fStaticDotDiameter: Field? = null
+    private var fDotPadding: Field? = null
+
+    private var mGetActualPaddingStart: Method? = null
+    private var mGetActualPaddingEnd: Method? = null
+    private var mGetDrawingScale: Method? = null
+    private var mShouldForceOverflow: Method? = null
+    private var mIsOverflowing: Method? = null
+    private var mGetRtlIconTranslationX: Method? = null
+    private var mPhysicalNotificationMovement: Method? = null
+
+    // Кэш для StatusBarIconView (инициализируется лениво по первому экземпляру child).
+    @Volatile
+    private var sbivResolved = false
+    private var mSbivGetVisibleState: Method? = null
+    private var mSbivSetVisibleState2: Method? = null
+    private var mSbivSetVisibleState1: Method? = null
+    private var fSbivVisibleState: Field? = null
+    private var fSbivDrawingSize: Field? = null
+    private var fSbivNewIconSize: Field? = null
+    private var fSbivStaticDotRadius: Field? = null
+
+    // Кэш для NotificationIconContainer$IconState и его суперкласса ViewState.
+    @Volatile
+    private var iconStateResolved = false
+    private var fStateVisibleState: Field? = null
+    private var fStateHidden: Field? = null
+    private var fStateIconAppearAmount: Field? = null
+    private var fStateXTranslation: Field? = null
+    private var mStateSetXTranslation: Method? = null
+    private var mStateGetXTranslation: Method? = null
+
+    private fun resolveContainerMembers(cls: Class<*>, flagsClass: Class<*>?) {
+        fLogTag = XposedHelpers.findFieldIfExists(cls, "mLogTag")
+        fIconSize = XposedHelpers.findFieldIfExists(cls, "mIconSize")
+        fIconStates = XposedHelpers.findFieldIfExists(cls, "mIconStates")
+        fMaxStaticIcons = XposedHelpers.findFieldIfExists(cls, "mMaxStaticIcons")
+        fMaxIcons = XposedHelpers.findFieldIfExists(cls, "mMaxIcons")
+        fMaxIconsOnAod = XposedHelpers.findFieldIfExists(cls, "mMaxIconsOnAod")
+        fMaxIconsOnLockscreen = XposedHelpers.findFieldIfExists(cls, "mMaxIconsOnLockscreen")
+        fActualLayoutWidth = XposedHelpers.findFieldIfExists(cls, "mActualLayoutWidth")
+        fActualPaddingStart = XposedHelpers.findFieldIfExists(cls, "mActualPaddingStart")
+        fActualPaddingEnd = XposedHelpers.findFieldIfExists(cls, "mActualPaddingEnd")
+        fFirstOverflowIndex = XposedHelpers.findFieldIfExists(cls, "mFirstOverflowIndex")
+        fIsShowingOverflowDot = XposedHelpers.findFieldIfExists(cls, "mIsShowingOverflowDot")
+        fWasOverflowForced = XposedHelpers.findFieldIfExists(cls, "mWasOverflowForced")
+        fVisualOverflowStart = XposedHelpers.findFieldIfExists(cls, "mVisualOverflowStart")
+        fFirstVisibleIconState = XposedHelpers.findFieldIfExists(cls, "mFirstVisibleIconState")
+        fLastVisibleIconState = XposedHelpers.findFieldIfExists(cls, "mLastVisibleIconState")
+        fOverrideIconColor = XposedHelpers.findFieldIfExists(cls, "mOverrideIconColor")
+        fStaticDotDiameter = XposedHelpers.findFieldIfExists(cls, "mStaticDotDiameter")
+        fDotPadding = XposedHelpers.findFieldIfExists(cls, "mDotPadding")
+
+        mGetActualPaddingStart = XposedHelpers.findMethodExactIfExists(cls, "getActualPaddingStart")
+        mGetActualPaddingEnd = XposedHelpers.findMethodExactIfExists(cls, "getActualPaddingEnd")
+        mGetDrawingScale = XposedHelpers.findMethodExactIfExists(cls, "getDrawingScale", View::class.java)
+        mShouldForceOverflow = XposedHelpers.findMethodExactIfExists(
+            cls, "shouldForceOverflow", Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Int::class.javaPrimitiveType
+        )
+        mIsOverflowing = XposedHelpers.findMethodExactIfExists(
+            cls, "isOverflowing",
+            Boolean::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType
+        )
+        mGetRtlIconTranslationX = XposedHelpers.findMethodBestMatch(cls, "getRtlIconTranslationX", Any::class.java, View::class.java)
+        if (flagsClass != null) {
+            mPhysicalNotificationMovement = XposedHelpers.findMethodExactIfExists(flagsClass, "physicalNotificationMovement")
         }
     }
 
+    private fun ensureSbivMembers(child: View) {
+        if (sbivResolved) return
+        val c = child.javaClass
+        mSbivGetVisibleState = XposedHelpers.findMethodExactIfExists(c, "getVisibleState")
+        mSbivSetVisibleState2 = XposedHelpers.findMethodExactIfExists(
+            c, "setVisibleState", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType
+        )
+        mSbivSetVisibleState1 = XposedHelpers.findMethodExactIfExists(
+            c, "setVisibleState", Int::class.javaPrimitiveType
+        )
+        fSbivVisibleState = XposedHelpers.findFieldIfExists(c, "mVisibleState")
+        fSbivDrawingSize = XposedHelpers.findFieldIfExists(c, "mStatusBarIconDrawingSize")
+        fSbivNewIconSize = XposedHelpers.findFieldIfExists(c, "mNewStatusBarIconSize")
+        fSbivStaticDotRadius = XposedHelpers.findFieldIfExists(c, "mStaticDotRadius")
+        sbivResolved = true
+    }
+
+    private fun ensureIconStateMembers(state: Any) {
+        if (iconStateResolved) return
+        val c = state.javaClass
+        fStateVisibleState = XposedHelpers.findFieldIfExists(c, "visibleState")
+        fStateHidden = XposedHelpers.findFieldIfExists(c, "hidden")
+        fStateIconAppearAmount = XposedHelpers.findFieldIfExists(c, "iconAppearAmount")
+        fStateXTranslation = XposedHelpers.findFieldIfExists(c, "mXTranslation")
+            ?: XposedHelpers.findFieldIfExists(c, "xTranslation")
+        mStateSetXTranslation = XposedHelpers.findMethodExactIfExists(c, "setXTranslation", Float::class.javaPrimitiveType)
+        mStateGetXTranslation = XposedHelpers.findMethodExactIfExists(c, "getXTranslation")
+        iconStateResolved = true
+    }
+
+    // [P3] Быстрая проверка ID контейнера без вызовов Resources.getResourceEntryName на каждый хук.
     private fun isStatusBarIcons(obj: Any?): Boolean {
-        return obj is View && idName(obj) == "notificationIcons"
+        if (obj !is View) return false
+        val id = obj.id
+        if (id == View.NO_ID) return false
+        var expected = notifIconsResId
+        if (expected == 0) {
+            expected = try {
+                obj.resources.getIdentifier("notificationIcons", "id", obj.context.packageName)
+                    .takeIf { it != 0 } ?: -1
+            } catch (_: Throwable) {
+                -1
+            }
+            notifIconsResId = expected
+        }
+        return id == expected
     }
 
     private fun isAodIcons(obj: Any?): Boolean {
         if (obj !is View) return false
         val logTag = try {
-            XposedHelpers.getObjectField(obj, "mLogTag") as? String
+            fLogTag?.get(obj) as? String
         } catch (_: Throwable) {
             null
         }
         if ("aod".equals(logTag, ignoreCase = true)) return true
-        return idName(obj) == "aod_notification_icon_container"
+        val id = obj.id
+        if (id == View.NO_ID) return false
+        var expected = aodIconsResId
+        if (expected == 0) {
+            expected = try {
+                obj.resources.getIdentifier("aod_notification_icon_container", "id", obj.context.packageName)
+                    .takeIf { it != 0 } ?: -1
+            } catch (_: Throwable) {
+                -1
+            }
+            aodIconsResId = expected
+        }
+        return id == expected
     }
 
-    private fun rawMax(prefs: Prefs): String {
-        return try {
-            prefs.getString("pref_max_notif_icons", "") ?: ""
+    // [P4] Кэшированный разбор "статусбар,аод" без лишних аллокаций строк и списков.
+    private fun updatePrefCache(prefs: Prefs) {
+        val raw = try {
+            prefs.getString("pref_max_notif_icons", "")
         } catch (_: Throwable) {
             ""
         }
+        if (raw == cachedRawPref) return
+        cachedSbMax = NotificationIconLimits.statusBar(raw)
+        cachedAodMax = NotificationIconLimits.aod(raw)
+        cachedRawPref = raw
     }
 
-    private fun statusBarMax(prefs: Prefs): Int? = NotificationIconLimits.statusBar(rawMax(prefs))
+    private fun statusBarMax(prefs: Prefs): Int? {
+        updatePrefCache(prefs)
+        return cachedSbMax
+    }
 
-    private fun aodMax(prefs: Prefs): Int? = NotificationIconLimits.aod(rawMax(prefs))
+    private fun aodMax(prefs: Prefs): Int? {
+        updatePrefCache(prefs)
+        return cachedAodMax
+    }
 
-    private fun setIntSafe(target: Any, field: String, value: Int) {
+    // [I1] Динамический headroom, чтобы при любом заданном лимите N в контейнере
+    // всегда хватало привязанных view для N иконок + 1 точки переполнения.
+    private fun bindHeadroom(prefs: Prefs): Int {
+        val sb = statusBarMax(prefs) ?: 0
+        return maxOf(MIN_BIND_HEADROOM, sb + 2)
+    }
+
+    private fun setIntField(field: Field?, target: Any, value: Int) {
+        if (field == null) return
         try {
-            XposedHelpers.setIntField(target, field, value)
+            field.setInt(target, value)
         } catch (_: Throwable) {
         }
     }
 
-    private fun setFloatSafe(target: Any, field: String, value: Float) {
+    private fun setFloatField(field: Field?, target: Any, value: Float) {
+        if (field == null) return
         try {
-            XposedHelpers.setFloatField(target, field, value)
+            field.setFloat(target, value)
         } catch (_: Throwable) {
         }
     }
 
     private fun iconSizeOf(v: View): Int {
         return try {
-            XposedHelpers.getIntField(v, "mIconSize").takeIf { it > 0 } ?: ICON_SIZE_FALLBACK
+            fIconSize?.getInt(v)?.takeIf { it > 0 } ?: ICON_SIZE_FALLBACK
         } catch (_: Throwable) {
             ICON_SIZE_FALLBACK
         }
@@ -147,59 +318,90 @@ class NotificationIconHooks : HookModule {
     }
 
     private fun visibleStateOf(child: View): Int {
+        ensureSbivMembers(child)
         return try {
-            (XposedHelpers.callMethod(child, "getVisibleState") as? Int) ?: -1
+            (mSbivGetVisibleState?.invoke(child) as? Int)
+                ?: fSbivVisibleState?.getInt(child)
+                ?: -1
         } catch (_: Throwable) {
             -1
         }
     }
 
-    // Ставит состояние иконки (icon/dot/hidden) максимально надёжно под разные ROM.
-    private fun setChildState(container: ViewGroup, child: View, state: Int) {
-        var ok = false
-        try {
-            XposedHelpers.callMethod(child, "setVisibleState", state, false)
-            ok = true
+    @Suppress("UNCHECKED_CAST")
+    private fun iconStateOf(container: ViewGroup, child: View): Any? {
+        return try {
+            (fIconStates?.get(container) as? Map<View, Any>)?.get(child)
         } catch (_: Throwable) {
+            null
         }
-        if (!ok) {
+    }
+
+    // Ставит состояние иконки (icon/dot/hidden) через закэшированные Method/Field.
+    private fun setChildState(container: ViewGroup, child: View, state: Int) {
+        ensureSbivMembers(child)
+        var ok = false
+        val m2 = mSbivSetVisibleState2
+        if (m2 != null) {
             try {
-                XposedHelpers.callMethod(child, "setVisibleState", state)
+                m2.invoke(child, state, false)
                 ok = true
             } catch (_: Throwable) {
             }
         }
         if (!ok) {
-            try {
-                XposedHelpers.setIntField(child, "mVisibleState", state)
-            } catch (_: Throwable) {
+            val m1 = mSbivSetVisibleState1
+            if (m1 != null) {
+                try {
+                    m1.invoke(child, state)
+                    ok = true
+                } catch (_: Throwable) {
+                }
             }
         }
-        try {
-            val states = XposedHelpers.getObjectField(container, "mIconStates")
-            val st = if (states != null) XposedHelpers.callMethod(states, "get", child) else null
-            if (st != null) setIntSafe(st, "visibleState", state)
-        } catch (_: Throwable) {
+        if (!ok) {
+            setIntField(fSbivVisibleState, child, state)
+        }
+        val st = iconStateOf(container, child)
+        if (st != null) {
+            ensureIconStateMembers(st)
+            setIntField(fStateVisibleState, st, state)
         }
     }
 
-    private fun positionDot(container: ViewGroup, child: View, targetX: Float) {
-        try {
-            val states = XposedHelpers.getObjectField(container, "mIconStates")
-            val st = if (states != null) XposedHelpers.callMethod(states, "get", child) else null
-            if (st != null) {
-                var set = false
-                try {
-                    XposedHelpers.callMethod(st, "setXTranslation", targetX)
-                    set = true
-                } catch (_: Throwable) {
-                }
-                if (!set) {
-                    setFloatSafe(st, "mXTranslation", targetX)
-                    setFloatSafe(st, "xTranslation", targetX)
-                }
+    private fun setStateX(state: Any, targetX: Float) {
+        ensureIconStateMembers(state)
+        val m = mStateSetXTranslation
+        if (m != null) {
+            try {
+                m.invoke(state, targetX)
+                return
+            } catch (_: Throwable) {
             }
+        }
+        setFloatField(fStateXTranslation, state, targetX)
+    }
+
+    private fun getStateX(state: Any, fallback: Float): Float {
+        ensureIconStateMembers(state)
+        val m = mStateGetXTranslation
+        if (m != null) {
+            try {
+                return (m.invoke(state) as? Float) ?: fallback
+            } catch (_: Throwable) {
+            }
+        }
+        return try {
+            fStateXTranslation?.getFloat(state) ?: fallback
         } catch (_: Throwable) {
+            fallback
+        }
+    }
+
+    private fun positionChild(container: ViewGroup, child: View, targetX: Float) {
+        val st = iconStateOf(container, child)
+        if (st != null) {
+            setStateX(st, targetX)
         }
         if (child.translationX != targetX) {
             try {
@@ -209,8 +411,7 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    private var lastCutoutDiag: String = ""
-
+    // [L2, R1] Определяет доступную ширину от левого края notificationIcons до физического выреза камеры.
     private fun availableWidthBeforeCutout(container: ViewGroup): Float {
         if (container.layoutDirection == View.LAYOUT_DIRECTION_RTL) return -1f
         return try {
@@ -218,27 +419,33 @@ class NotificationIconHooks : HookModule {
             val topRect = cutout.boundingRectTop
             if (topRect.isEmpty) return -1f
             val screenW = screenWidthOf(container)
-            // Нужен именно центральный вырез камеры сверху, не угловой (и не ландшафт без выреза сверху).
-            if (topRect.left <= 0 || topRect.right >= screenW) return -1f
-            val cPos = IntArray(2)
-            container.getLocationOnScreen(cPos)
+            // Нужен именно центральный вырез камеры сверху (topRect.top <= 0), не угловой и не перевёрнутый на 180° экран.
+            if (topRect.top > 0 || topRect.left <= 0 || topRect.right >= screenW) return -1f
+            container.getLocationOnScreen(tmpLoc)
             // Физическая линза расположена по центру экрана (screenW / 2) с полурадиусом ~3.5% ширины экрана
             // (~38px на 1080p); boundingRectTop у Nothing даёт заметно более широкую программную зону.
             val physicalLeft = screenW / 2f - screenW * 0.035f
-            lastCutoutDiag = "cX=${cPos[0]} scrW=$screenW topL=${topRect.left} topR=${topRect.right}"
-            val avail = physicalLeft - cPos[0]
+            val avail = physicalLeft - tmpLoc[0]
             if (avail > 0f) avail else -1f
         } catch (_: Throwable) {
             -1f
         }
     }
 
-    private fun intFieldOr(obj: Any, field: String, fallback: Int): Int {
+    private fun intFieldOr(field: Field?, obj: Any, fallback: Int): Int {
+        if (field == null) return fallback
         return try {
-            XposedHelpers.getIntField(obj, field).takeIf { it > 0 } ?: fallback
+            field.getInt(obj).takeIf { it > 0 } ?: fallback
         } catch (_: Throwable) {
             fallback
         }
+    }
+
+    private fun ensureIconBuffersCapacity(needed: Int) {
+        if (iconRefs.size >= needed) return
+        val newSize = maxOf(needed, iconRefs.size * 2)
+        iconRefs = iconRefs.copyOf(newSize)
+        iconTargetsX = iconTargetsX.copyOf(newSize)
     }
 
     // Держит видимыми не более max иконок: лишнюю превращает в точку, остальные прячет.
@@ -252,7 +459,8 @@ class NotificationIconHooks : HookModule {
             val max = statusBarMax(prefs) ?: return
             val iconSize = iconSizeOf(container)
             val n = container.childCount
-            val shownIcons = ArrayList<View>(max)
+            val shownIcons = tmpShownIcons
+            shownIcons.clear()
             var dotChild: View? = null
 
             for (i in 0 until n) {
@@ -280,18 +488,19 @@ class NotificationIconHooks : HookModule {
 
             val shownCount = shownIcons.size
             val sample = dotChild ?: shownIcons.firstOrNull()
+            if (sample != null) ensureSbivMembers(sample)
             val drawingSize = if (sample != null) {
-                intFieldOr(sample, "mStatusBarIconDrawingSize", (iconSize * 0.72f).toInt()).toFloat()
+                intFieldOr(fSbivDrawingSize, sample, (iconSize * 0.72f).toInt()).toFloat()
             } else {
                 iconSize * 0.72f
             }
             val dotDrawOffset = if (sample != null) {
-                intFieldOr(sample, "mNewStatusBarIconSize", iconSize) / 2f
+                intFieldOr(fSbivNewIconSize, sample, iconSize) / 2f
             } else {
                 iconSize / 2f
             }
             val dotRadius = if (sample != null) {
-                intFieldOr(sample, "mStaticDotRadius", 8).toFloat()
+                intFieldOr(fSbivStaticDotRadius, sample, 8).toFloat()
             } else {
                 8f
             }
@@ -318,16 +527,34 @@ class NotificationIconHooks : HookModule {
                 }
             }
 
+            // [L1, R1] Записываем координаты иконок без аллокаций Pair/Array.
+            // При переходе из compacted -> non-compacted восстанавливаем штатный шаг idx * iconSize.
             if (compacted && shownCount > 0) {
-                val posArr = Array(shownCount) { idx ->
+                ensureIconBuffersCapacity(shownCount)
+                for (idx in 0 until shownCount) {
                     val child = shownIcons[idx]
                     val x = startX + idx * step
-                    positionDot(container, child, x)
-                    WeakReference(child) to x
+                    positionChild(container, child, x)
+                    val curRef = iconRefs[idx]
+                    if (curRef == null || curRef.get() !== child) {
+                        iconRefs[idx] = WeakReference(child)
+                    }
+                    iconTargetsX[idx] = x
                 }
-                iconPositions = posArr
+                for (idx in shownCount until compactedIconCount) {
+                    iconRefs[idx] = null
+                }
+                compactedIconCount = shownCount
             } else {
-                iconPositions = emptyArray()
+                if (compactedIconCount > 0) {
+                    for (idx in 0 until shownCount) {
+                        positionChild(container, shownIcons[idx], idx * iconSize.toFloat())
+                    }
+                    for (idx in 0 until compactedIconCount) {
+                        iconRefs[idx] = null
+                    }
+                    compactedIconCount = 0
+                }
             }
 
             val dc = dotChild
@@ -343,35 +570,33 @@ class NotificationIconHooks : HookModule {
                         targetX = maxDotX
                     }
                 }
-                positionDot(container, dc, targetX)
-                dotRef = WeakReference(dc)
+                positionChild(container, dc, targetX)
+                val curDot = dotRef
+                if (curDot == null || curDot.get() !== dc) {
+                    dotRef = WeakReference(dc)
+                }
                 dotTargetX = targetX
             } else {
                 dotRef = null
             }
-
-            val logSig = "$max:$shownCount:${dc != null}:$iconSize:${drawingSize.toInt()}:${availPx.toInt()}:${step.toInt()}:${targetX.toInt()}:$compacted"
-            if (logSig != lastSbLogSig) {
-                lastSbLogSig = logSig
-                XposedBridge.log(
-                    "NothingTweaks: [NotificationIconHooks] sb max=$max shown=$shownCount hasDot=${dc != null} " +
-                        "iconSize=$iconSize drawSize=${drawingSize.toInt()} dotOff=${dotDrawOffset.toInt()} " +
-                        "avail=${availPx.toInt()} startX=${startX.toInt()} step=${step.toInt()} dotX=${targetX.toInt()} " +
-                        "compact=$compacted [$lastCutoutDiag]"
-                )
-            }
+            shownIcons.clear()
         } finally {
             enforcing = false
         }
     }
 
-    // Пер-кадровый якорь: O(1), без рефлексии/Prefs, пока точка или сжатые иконки не сдвинулись.
+    // [P5] Пер-кадровый якорь: O(1), мгновенный выход если нет ни сжатых иконок, ни точки;
+    // без рефлексии/Prefs/аллокаций в горячем пути 120 Гц.
     private fun holdDot() {
-        val positions = iconPositions
-        for (i in positions.indices) {
-            val entry = positions[i]
-            val v = entry.first.get() ?: continue
-            val tx = entry.second
+        val count = compactedIconCount
+        val dRef = dotRef
+        if (count == 0 && dRef == null) return
+
+        val refs = iconRefs
+        val targets = iconTargetsX
+        for (i in 0 until count) {
+            val v = refs[i]?.get() ?: continue
+            val tx = targets[i]
             if (v.translationX != tx) {
                 try {
                     v.translationX = tx
@@ -379,7 +604,7 @@ class NotificationIconHooks : HookModule {
                 }
             }
         }
-        val child = dotRef?.get() ?: return
+        val child = dRef?.get() ?: return
         val target = dotTargetX
         if (child.translationX != target && visibleStateOf(child) == STATE_DOT) {
             try {
@@ -430,6 +655,30 @@ class NotificationIconHooks : HookModule {
         }
     }
 
+    private fun callPaddingStart(container: ViewGroup): Float {
+        return try {
+            (mGetActualPaddingStart?.invoke(container) as? Float) ?: container.paddingStart.toFloat()
+        } catch (_: Throwable) {
+            0f
+        }
+    }
+
+    private fun callPaddingEnd(container: ViewGroup): Float {
+        return try {
+            (mGetActualPaddingEnd?.invoke(container) as? Float) ?: container.paddingEnd.toFloat()
+        } catch (_: Throwable) {
+            0f
+        }
+    }
+
+    private fun callDrawingScale(container: ViewGroup, child: View): Float {
+        return try {
+            (mGetDrawingScale?.invoke(container, child) as? Float) ?: 1.0f
+        } catch (_: Throwable) {
+            1.0f
+        }
+    }
+
     override fun handleLoadPackage(
         lpparam: XC_LoadPackage.LoadPackageParam,
         prefs: Prefs
@@ -438,32 +687,46 @@ class NotificationIconHooks : HookModule {
             "com.android.systemui.statusbar.phone.NotificationIconContainer",
             lpparam.classLoader
         ) ?: return
+        val flagsClass = XposedHelpers.findClassIfExists("com.android.systemui.Flags", lpparam.classLoader)
 
-        try {
-            XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val max = aodMax(prefs) ?: return
-                    // +1 слот под точку переполнения: заданное число = число иконок,
-                    // точка добавляется сверху (как в статусбаре, mMaxStaticIcons = max + 1).
-                    val slots = max + 1
-                    setIntSafe(param.thisObject, "mMaxIconsOnAod", slots)
-                    setIntSafe(param.thisObject, "mMaxIconsOnLockscreen", slots)
-                }
-            })
-        } catch (_: Throwable) {
+        resolveContainerMembers(cls, flagsClass)
+
+        // [P1] Хукаем initResources только если на данной прошивке реально существуют legacy-поля.
+        if (fMaxIconsOnAod != null || fMaxIconsOnLockscreen != null) {
+            try {
+                XposedBridge.hookAllMethods(cls, "initResources", object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val max = aodMax(prefs) ?: return
+                        val slots = max + 1
+                        setIntField(fMaxIconsOnAod, param.thisObject, slots)
+                        setIntField(fMaxIconsOnLockscreen, param.thisObject, slots)
+                    }
+                })
+            } catch (_: Throwable) {
+            }
         }
 
+        // [G1] Подменяем getIconLimit только для AOD-данных (где дефолтный лимит <= DEFAULT_AOD_SLOTS
+        // или уже равен нашему aodMax + 1), чтобы не затрагивать StatusBar (40) и Shelf.
         try {
             val dataClass = XposedHelpers.findClassIfExists(
                 "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconsViewData",
                 lpparam.classLoader
             )
             if (dataClass != null) {
+                val fIconLimit = XposedHelpers.findFieldIfExists(dataClass, "iconLimit")
                 XposedBridge.hookAllMethods(dataClass, "getIconLimit", object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        // +1 слот под точку переполнения, чтобы AOD показывал "N иконок + точка"
-                        // как статусбар (иначе выходит "N-1 иконок + точка").
-                        aodMax(prefs)?.let { param.result = it + 1 }
+                        val max = aodMax(prefs) ?: return
+                        val targetSlots = max + 1
+                        val rawLimit = try {
+                            fIconLimit?.getInt(param.thisObject) ?: DEFAULT_AOD_SLOTS
+                        } catch (_: Throwable) {
+                            DEFAULT_AOD_SLOTS
+                        }
+                        if (rawLimit <= DEFAULT_AOD_SLOTS || rawLimit == targetSlots) {
+                            param.result = targetSlots
+                        }
                     }
                 })
             }
@@ -475,11 +738,12 @@ class NotificationIconHooks : HookModule {
                 "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconContainerAlwaysOnDisplayViewModel",
                 lpparam.classLoader
             )
-            if (aodVmClass != null && XposedHelpers.findFieldIfExists(aodVmClass, "maxIcons") != null) {
+            val fVmMaxIcons = if (aodVmClass != null) XposedHelpers.findFieldIfExists(aodVmClass, "maxIcons") else null
+            if (aodVmClass != null && fVmMaxIcons != null) {
                 XposedBridge.hookAllConstructors(aodVmClass, object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val max = aodMax(prefs) ?: return
-                        setIntSafe(param.thisObject, "maxIcons", max + 1)
+                        setIntField(fVmMaxIcons, param.thisObject, max + 1)
                     }
                 })
             }
@@ -492,21 +756,21 @@ class NotificationIconHooks : HookModule {
         try {
             XposedBridge.hookAllMethods(cls, "setActualLayoutWidth", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    val max = aodMax(prefs) ?: return
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isAodIcons(container)) return
+                    val max = aodMax(prefs) ?: return
                     val iconSize = try {
-                        XposedHelpers.getIntField(container, "mIconSize")
+                        fIconSize?.getInt(container) ?: 0
                     } catch (_: Throwable) {
                         0
                     }
                     if (iconSize <= 0) return
 
                     val slots = max + 1
-                    val padStart = (XposedHelpers.callMethod(container, "getActualPaddingStart") as? Float) ?: 0f
-                    val padEnd = (XposedHelpers.callMethod(container, "getActualPaddingEnd") as? Float) ?: 0f
+                    val padStart = callPaddingStart(container)
+                    val padEnd = callPaddingEnd(container)
                     val drawingScale = if (container.childCount > 0) {
-                        (XposedHelpers.callMethod(container, "getDrawingScale", container.getChildAt(0)) as? Float) ?: 1.0f
+                        callDrawingScale(container, container.getChildAt(0))
                     } else {
                         1.0f
                     }
@@ -520,8 +784,6 @@ class NotificationIconHooks : HookModule {
         } catch (_: Throwable) {
         }
 
-        val flagsClass = XposedHelpers.findClassIfExists("com.android.systemui.Flags", lpparam.classLoader)
-
         try {
             XposedBridge.hookAllMethods(cls, "calculateIconXTranslations", object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
@@ -531,40 +793,32 @@ class NotificationIconHooks : HookModule {
                     val view = container as View
                     val max = statusBarMax(prefs) ?: return
                     val slots = max + 1
-                    // maxStatic=max+1 даёт родные "max иконок + точка" при большом числе уведомлений.
-                    setIntSafe(container, "mMaxStaticIcons", slots)
-                    // Достаточный headroom, чтобы (max+1)-я view существовала и её можно было
-                    // превратить в точку на границе.
-                    setIntSafe(container, "mMaxIcons", BIND_HEADROOM)
-                    // Щедрая ширина: ROM раскладывает все иконки, лишнюю в точку превращаем сами.
+                    // [P1] fMaxStaticIcons == null на Android 17 -> setIntField мгновенно выходит без NoSuchFieldError.
+                    setIntField(fMaxStaticIcons, container, slots)
+                    setIntField(fMaxIcons, container, bindHeadroom(prefs))
                     widenParents(view, fullWidth(view, slots))
-                    setIntSafe(container, "mActualLayoutWidth", layoutWidth(view, slots))
-                    // Иконки должны начинаться с x=0, иначе ломается расчёт targetX точки.
-                    setFloatSafe(container, "mActualPaddingStart", 0f)
-                    setFloatSafe(container, "mActualPaddingEnd", 0f)
+                    setIntField(fActualLayoutWidth, container, layoutWidth(view, slots))
+                    setFloatField(fActualPaddingStart, container, 0f)
+                    setFloatField(fActualPaddingEnd, container, 0f)
                 }
 
                 // Android 17 / Nothing OS 5: для центрированных часов на AOD захардкожено `i3 <= 5`,
                 // что обрезает раскладку до 4 иконок + точка. Пересчитываем под aodMax + 1 слотов.
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    val max = aodMax(prefs) ?: return
-                    val slots = max + 1
-                    if (slots <= 5) return
                     val container = param.thisObject as? ViewGroup ?: return
                     if (!isAodIcons(container)) return
-                    if (container.childCount <= 5 || container.width <= 0) return
+                    val max = aodMax(prefs) ?: return
+                    val slots = max + 1
+                    if (slots <= DEFAULT_AOD_SLOTS) return
+                    if (container.childCount <= DEFAULT_AOD_SLOTS || container.width <= 0) return
 
                     val firstVisible = try {
-                        XposedHelpers.getObjectField(container, "mFirstVisibleIconState")
+                        fFirstVisibleIconState?.get(container)
                     } catch (_: Throwable) {
                         null
                     }
-                    val padStart = (XposedHelpers.callMethod(container, "getActualPaddingStart") as? Float) ?: 0f
-                    val firstX = if (firstVisible != null) {
-                        (XposedHelpers.callMethod(firstVisible, "getXTranslation") as? Float) ?: padStart
-                    } else {
-                        padStart
-                    }
+                    val padStart = callPaddingStart(container)
+                    val firstX = if (firstVisible != null) getStateX(firstVisible, padStart) else padStart
                     val isRtl = container.layoutDirection == View.LAYOUT_DIRECTION_RTL
                     val isCentered = if (!isRtl) {
                         firstX > padStart + 1f
@@ -574,7 +828,7 @@ class NotificationIconHooks : HookModule {
                     }
                     if (!isCentered) return
 
-                    recalculateCenteredAod(container, slots, flagsClass)
+                    recalculateCenteredAod(container, slots)
                 }
             })
         } catch (_: Throwable) {
@@ -598,7 +852,7 @@ class NotificationIconHooks : HookModule {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     if (param.args.isEmpty()) return
                     if (isStatusBarIcons(param.thisObject)) {
-                        param.args[0] = BIND_HEADROOM
+                        param.args[0] = bindHeadroom(prefs)
                     } else if (isAodIcons(param.thisObject)) {
                         aodMax(prefs)?.let { param.args[0] = it + 1 }
                     }
@@ -622,29 +876,36 @@ class NotificationIconHooks : HookModule {
         }
     }
 
-    private fun recalculateCenteredAod(container: ViewGroup, slots: Int, flagsClass: Class<*>?) {
+    // [E1, I1] Безопасный пересчёт центрированного AOD через закэшированные Field/Method без жёстких кастов.
+    private fun recalculateCenteredAod(container: ViewGroup, slots: Int) {
+        if (slots <= 0) return
         try {
             @Suppress("UNCHECKED_CAST")
-            val iconStates = XposedHelpers.getObjectField(container, "mIconStates") as? HashMap<View, Any> ?: return
+            val iconStates = fIconStates?.get(container) as? Map<View, Any> ?: return
             val childCount = container.childCount
             val width = container.width
-            val iconSize = XposedHelpers.getIntField(container, "mIconSize")
-            if (iconSize <= 0) return
+            val iconSize = fIconSize?.getInt(container) ?: 0
+            if (iconSize <= 0 || childCount <= 0) return
 
-            val padStart = XposedHelpers.callMethod(container, "getActualPaddingStart") as Float
-            val padEnd = XposedHelpers.callMethod(container, "getActualPaddingEnd") as Float
+            val firstState = iconStates[container.getChildAt(0)]
+            if (firstState != null) ensureIconStateMembers(firstState)
+            val fHidden = fStateHidden ?: return
+            val fAppear = fStateIconAppearAmount ?: return
+            val fVisState = fStateVisibleState ?: return
+
+            val padStart = callPaddingStart(container)
+            val padEnd = callPaddingEnd(container)
             val maxContentWidth = (width - padStart - padEnd).coerceAtLeast(0f)
 
             var totalWidth = 0f
             var visibleCount = 0
             for (i in 0 until childCount) {
-                val child = container.getChildAt(i)
+                val child = container.getChildAt(i) ?: continue
                 val state = iconStates[child] ?: continue
-                val hidden = XposedHelpers.getBooleanField(state, "hidden")
-                if (!hidden) visibleCount++
+                if (!fHidden.getBoolean(state)) visibleCount++
                 if (visibleCount <= slots) {
-                    val appear = XposedHelpers.getFloatField(state, "iconAppearAmount")
-                    val scale = XposedHelpers.callMethod(container, "getDrawingScale", child) as Float
+                    val appear = fAppear.getFloat(state)
+                    val scale = callDrawingScale(container, child)
                     val step = appear * child.width * scale
                     if (totalWidth + step <= maxContentWidth + 0.5f) {
                         totalWidth += step
@@ -655,7 +916,7 @@ class NotificationIconHooks : HookModule {
             var x = ((width - totalWidth) / 2f).coerceAtLeast(padStart)
             val rightBound = x + totalWidth + 0.5f
 
-            val overrideIconColor = XposedHelpers.getBooleanField(container, "mOverrideIconColor")
+            val overrideIconColor = fOverrideIconColor?.getBoolean(container) ?: false
             var firstOverflowIndex = -1
             var visualOverflowStart = 0f
             var wasOverflowForced = false
@@ -664,23 +925,23 @@ class NotificationIconHooks : HookModule {
             var lastVisibleState: Any? = null
 
             for (i in 0 until childCount) {
-                val child = container.getChildAt(i)
+                val child = container.getChildAt(i) ?: continue
                 val state = iconStates[child] ?: continue
-                val appear = XposedHelpers.getFloatField(state, "iconAppearAmount")
+                val appear = fAppear.getFloat(state)
                 if (appear == 1.0f) {
-                    XposedHelpers.callMethod(state, "setXTranslation", x)
+                    setStateX(state, x)
                 }
                 if (firstVisibleState == null) {
                     firstVisibleState = state
                 }
-                val hidden = XposedHelpers.getBooleanField(state, "hidden")
-                XposedHelpers.setIntField(state, "visibleState", if (hidden) 2 else 0)
+                fVisState.setInt(state, if (fHidden.getBoolean(state)) STATE_HIDDEN else STATE_ICON)
 
-                val forced = XposedHelpers.callMethod(container, "shouldForceOverflow", i, appear, slots) as Boolean
+                val forced = (mShouldForceOverflow?.invoke(container, i, appear, slots) as? Boolean)
+                    ?: (i >= slots && appear > 0f)
                 val isLast = i == childCount - 1
-                val overflowing = (forced || (XposedHelpers.callMethod(
-                    container, "isOverflowing", isLast, x, rightBound, iconSize.toFloat()
-                ) as Boolean)) && appear > 0f
+                val isOvf = (mIsOverflowing?.invoke(container, isLast, x, rightBound, iconSize.toFloat()) as? Boolean)
+                    ?: (x + iconSize > rightBound)
+                val overflowing = (forced || isOvf) && appear > 0f
 
                 if (firstOverflowIndex == -1 && overflowing) {
                     wasOverflowForced = forced
@@ -691,38 +952,34 @@ class NotificationIconHooks : HookModule {
                         val idx = if (i > 0) i - 1 else i
                         firstOverflowIndex = idx
                         val prevState = iconStates[container.getChildAt(idx)]
-                        visualOverflowStart = if (prevState != null) {
-                            XposedHelpers.callMethod(prevState, "getXTranslation") as Float
-                        } else {
-                            x
-                        }
+                        visualOverflowStart = if (prevState != null) getStateX(prevState, x) else x
                     }
                 }
 
-                val scale = XposedHelpers.callMethod(container, "getDrawingScale", child) as Float
+                val scale = callDrawingScale(container, child)
                 x += appear * child.width * scale
             }
 
             val physicalMovement = try {
-                flagsClass != null && (XposedHelpers.callStaticMethod(flagsClass, "physicalNotificationMovement") as Boolean)
+                (mPhysicalNotificationMovement?.invoke(null) as? Boolean) ?: false
             } catch (_: Throwable) {
                 false
             }
 
             if (firstOverflowIndex != -1) {
                 var dotX = visualOverflowStart
-                val dotStep = XposedHelpers.getIntField(container, "mStaticDotDiameter") +
-                    XposedHelpers.getIntField(container, "mDotPadding")
+                val dotStep = (fStaticDotDiameter?.getInt(container) ?: 12) +
+                    (fDotPadding?.getInt(container) ?: 6)
                 for (i in firstOverflowIndex until childCount) {
                     val state = iconStates[container.getChildAt(i)] ?: continue
-                    val appear = XposedHelpers.getFloatField(state, "iconAppearAmount")
-                    XposedHelpers.callMethod(state, "setXTranslation", dotX)
+                    val appear = fAppear.getFloat(state)
+                    setStateX(state, dotX)
                     val isLast = i == childCount - 1
                     if (!isShowingOverflowDot) {
                         if (appear < 0.8f && (isLast || !physicalMovement)) {
-                            XposedHelpers.setIntField(state, "visibleState", 0)
+                            fVisState.setInt(state, STATE_ICON)
                         } else {
-                            XposedHelpers.setIntField(state, "visibleState", if (isLast || !physicalMovement) 1 else 2)
+                            fVisState.setInt(state, if (isLast || !physicalMovement) STATE_DOT else STATE_HIDDEN)
                             isShowingOverflowDot = true
                         }
                         if (!physicalMovement) {
@@ -730,29 +987,31 @@ class NotificationIconHooks : HookModule {
                         }
                         lastVisibleState = state
                     } else {
-                        XposedHelpers.setIntField(state, "visibleState", if (isLast && physicalMovement) 1 else 2)
+                        fVisState.setInt(state, if (isLast && physicalMovement) STATE_DOT else STATE_HIDDEN)
                     }
                 }
-            } else if (childCount > 0) {
+            } else {
                 lastVisibleState = iconStates[container.getChildAt(childCount - 1)]
                 firstVisibleState = iconStates[container.getChildAt(0)]
             }
 
             if (container.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+                val mRtl = mGetRtlIconTranslationX
                 for (i in 0 until childCount) {
-                    val child = container.getChildAt(i)
+                    val child = container.getChildAt(i) ?: continue
                     val state = iconStates[child] ?: continue
-                    val rtlX = XposedHelpers.callMethod(container, "getRtlIconTranslationX", state, child) as Float
-                    XposedHelpers.callMethod(state, "setXTranslation", rtlX)
+                    val rtlX = (mRtl?.invoke(container, state, child) as? Float)
+                        ?: ((width - getStateX(state, 0f)) - child.width)
+                    setStateX(state, rtlX)
                 }
             }
 
-            XposedHelpers.setIntField(container, "mFirstOverflowIndex", firstOverflowIndex)
-            XposedHelpers.setBooleanField(container, "mIsShowingOverflowDot", isShowingOverflowDot)
-            XposedHelpers.setBooleanField(container, "mWasOverflowForced", wasOverflowForced)
-            XposedHelpers.setFloatField(container, "mVisualOverflowStart", visualOverflowStart)
-            XposedHelpers.setObjectField(container, "mFirstVisibleIconState", firstVisibleState)
-            XposedHelpers.setObjectField(container, "mLastVisibleIconState", lastVisibleState)
+            setIntField(fFirstOverflowIndex, container, firstOverflowIndex)
+            fIsShowingOverflowDot?.setBoolean(container, isShowingOverflowDot)
+            fWasOverflowForced?.setBoolean(container, wasOverflowForced)
+            setFloatField(fVisualOverflowStart, container, visualOverflowStart)
+            fFirstVisibleIconState?.set(container, firstVisibleState)
+            fLastVisibleIconState?.set(container, lastVisibleState)
         } catch (_: Throwable) {
         }
     }
