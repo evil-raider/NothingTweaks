@@ -38,19 +38,24 @@ jobs:
       - name: Build Minified Debug APK
         run: ./gradlew assembleDebug
 
-      # Locates the debug APK (which is auto-signed with the debug certificate)
+      # Locates and renames the debug APK (which is auto-signed with the debug certificate)
       - name: Locate Debug APK
         id: locate_apk
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
+          RAW_APK=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
 
-          if [ -z "$APK_PATH" ]; then
+          if [ -z "$RAW_APK" ]; then
             echo "Error: Debug APK not found!"
             exit 1
           fi
 
+          APK_PATH="app/build/outputs/apk/debug/nothingTweaks_v${VERSION_NAME}.apk"
+          mv "$RAW_APK" "$APK_PATH"
+
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
-          echo "Found APK at: $APK_PATH"
+          echo "Staged APK at: $APK_PATH"
 
       # Calculate SHA-256 hash of the exact APK being released
       - name: Calculate APK SHA-256
@@ -75,7 +80,7 @@ jobs:
       - name: Upload APK to Actions Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: NothingTweaks-v${{ github.event.inputs.version_name }}-debug
+          name: nothingTweaks_v${{ github.event.inputs.version_name }}
           path: ${{ steps.locate_apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 90
@@ -88,6 +93,7 @@ jobs:
           files: ${{ steps.locate_apk.outputs.apk_path }}
           name: Release v${{ inputs.version_name }}
           tag_name: v${{ inputs.version_name }}
+          target_commitish: ${{ github.sha }}
           body: |
             > [!NOTE]
             > **Verified Build:** This release binary was compiled directly by GitHub Actions.
