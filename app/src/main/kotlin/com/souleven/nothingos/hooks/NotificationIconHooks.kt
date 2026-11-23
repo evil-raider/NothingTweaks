@@ -218,9 +218,14 @@ class NotificationIconHooks : HookModule {
             val screenW = screenWidthOf(container)
             // Нужен именно центральный вырез камеры сверху, не угловой (и не ландшафт без выреза сверху).
             if (topRect.left <= 0 || topRect.right >= screenW) return -1f
+            // DisplayCutout.boundingRectTop у Nothing включает широкую защитную зону (~172px),
+            // тогда как физическая линза по центру выреза заметно уже (~7-8% ширины экрана).
+            val cutoutCenter = (topRect.left + topRect.right) / 2f
+            val halfPhysicalHole = minOf(topRect.width() / 2f, screenW * 0.038f)
+            val physicalLeft = cutoutCenter - halfPhysicalHole
             val cPos = IntArray(2)
             container.getLocationOnScreen(cPos)
-            val avail = (topRect.left - cPos[0]).toFloat()
+            val avail = physicalLeft - cPos[0]
             if (avail > 0f) avail else -1f
         } catch (_: Throwable) {
             -1f
@@ -292,10 +297,10 @@ class NotificationIconHooks : HookModule {
 
             val availPx = availableWidthBeforeCutout(container)
             val cutoutMargin = 6f
-            val dotGap = 8f
+            val dotGap = 6f
             val dotExtra = if (dotChild != null) (dotGap + 2f * dotRadius) else 0f
 
-            var startX = 0f
+            val startX = 0f
             var step = iconSize.toFloat()
             var compacted = false
 
@@ -303,7 +308,6 @@ class NotificationIconHooks : HookModule {
                 val uncompactedRight = (shownCount - 1) * iconSize + (iconSize + drawingSize) / 2f + dotExtra
                 if (uncompactedRight > availPx - cutoutMargin) {
                     compacted = true
-                    startX = -((iconSize - drawingSize) / 4f).coerceAtLeast(0f)
                     if (shownCount > 1) {
                         val spaceForSteps = availPx - cutoutMargin - dotExtra - startX - (iconSize + drawingSize) / 2f
                         step = (spaceForSteps / (shownCount - 1)).coerceIn(drawingSize + 2f, iconSize.toFloat())
