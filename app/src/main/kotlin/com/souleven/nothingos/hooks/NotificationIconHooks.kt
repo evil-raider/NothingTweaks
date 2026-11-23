@@ -297,7 +297,7 @@ class NotificationIconHooks : HookModule {
             }
 
             val availPx = availableWidthBeforeCutout(container)
-            val cutoutMargin = 4f
+            val cutoutMargin = 13f
             val dotGap = 4f
             val dotExtra = if (dotChild != null) (dotGap + 2f * dotRadius) else 0f
 
