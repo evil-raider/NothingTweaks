@@ -112,69 +112,86 @@ class NotificationIconHooks : HookModule {
     private var mStateGetXTranslation: Method? = null
 
     private fun resolveContainerMembers(cls: Class<*>, flagsClass: Class<*>?) {
-        fLogTag = XposedHelpers.findFieldIfExists(cls, "mLogTag")
-        fIconSize = XposedHelpers.findFieldIfExists(cls, "mIconSize")
-        fIconStates = XposedHelpers.findFieldIfExists(cls, "mIconStates")
-        fMaxStaticIcons = XposedHelpers.findFieldIfExists(cls, "mMaxStaticIcons")
-        fMaxIcons = XposedHelpers.findFieldIfExists(cls, "mMaxIcons")
-        fMaxIconsOnAod = XposedHelpers.findFieldIfExists(cls, "mMaxIconsOnAod")
-        fMaxIconsOnLockscreen = XposedHelpers.findFieldIfExists(cls, "mMaxIconsOnLockscreen")
-        fActualLayoutWidth = XposedHelpers.findFieldIfExists(cls, "mActualLayoutWidth")
-        fActualPaddingStart = XposedHelpers.findFieldIfExists(cls, "mActualPaddingStart")
-        fActualPaddingEnd = XposedHelpers.findFieldIfExists(cls, "mActualPaddingEnd")
-        fFirstOverflowIndex = XposedHelpers.findFieldIfExists(cls, "mFirstOverflowIndex")
-        fIsShowingOverflowDot = XposedHelpers.findFieldIfExists(cls, "mIsShowingOverflowDot")
-        fWasOverflowForced = XposedHelpers.findFieldIfExists(cls, "mWasOverflowForced")
-        fVisualOverflowStart = XposedHelpers.findFieldIfExists(cls, "mVisualOverflowStart")
-        fFirstVisibleIconState = XposedHelpers.findFieldIfExists(cls, "mFirstVisibleIconState")
-        fLastVisibleIconState = XposedHelpers.findFieldIfExists(cls, "mLastVisibleIconState")
-        fOverrideIconColor = XposedHelpers.findFieldIfExists(cls, "mOverrideIconColor")
-        fStaticDotDiameter = XposedHelpers.findFieldIfExists(cls, "mStaticDotDiameter")
-        fDotPadding = XposedHelpers.findFieldIfExists(cls, "mDotPadding")
+        try {
+            fLogTag = XposedHelpers.findFieldIfExists(cls, "mLogTag")
+            fIconSize = XposedHelpers.findFieldIfExists(cls, "mIconSize")
+            fIconStates = XposedHelpers.findFieldIfExists(cls, "mIconStates")
+            fMaxStaticIcons = XposedHelpers.findFieldIfExists(cls, "mMaxStaticIcons")
+            fMaxIcons = XposedHelpers.findFieldIfExists(cls, "mMaxIcons")
+            fMaxIconsOnAod = XposedHelpers.findFieldIfExists(cls, "mMaxIconsOnAod")
+            fMaxIconsOnLockscreen = XposedHelpers.findFieldIfExists(cls, "mMaxIconsOnLockscreen")
+            fActualLayoutWidth = XposedHelpers.findFieldIfExists(cls, "mActualLayoutWidth")
+            fActualPaddingStart = XposedHelpers.findFieldIfExists(cls, "mActualPaddingStart")
+            fActualPaddingEnd = XposedHelpers.findFieldIfExists(cls, "mActualPaddingEnd")
+            fFirstOverflowIndex = XposedHelpers.findFieldIfExists(cls, "mFirstOverflowIndex")
+            fIsShowingOverflowDot = XposedHelpers.findFieldIfExists(cls, "mIsShowingOverflowDot")
+            fWasOverflowForced = XposedHelpers.findFieldIfExists(cls, "mWasOverflowForced")
+            fVisualOverflowStart = XposedHelpers.findFieldIfExists(cls, "mVisualOverflowStart")
+            fFirstVisibleIconState = XposedHelpers.findFieldIfExists(cls, "mFirstVisibleIconState")
+            fLastVisibleIconState = XposedHelpers.findFieldIfExists(cls, "mLastVisibleIconState")
+            fOverrideIconColor = XposedHelpers.findFieldIfExists(cls, "mOverrideIconColor")
+            fStaticDotDiameter = XposedHelpers.findFieldIfExists(cls, "mStaticDotDiameter")
+            fDotPadding = XposedHelpers.findFieldIfExists(cls, "mDotPadding")
 
-        mGetActualPaddingStart = XposedHelpers.findMethodExactIfExists(cls, "getActualPaddingStart")
-        mGetActualPaddingEnd = XposedHelpers.findMethodExactIfExists(cls, "getActualPaddingEnd")
-        mGetDrawingScale = XposedHelpers.findMethodExactIfExists(cls, "getDrawingScale", View::class.java)
-        mShouldForceOverflow = XposedHelpers.findMethodExactIfExists(
-            cls, "shouldForceOverflow", Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Int::class.javaPrimitiveType
-        )
-        mIsOverflowing = XposedHelpers.findMethodExactIfExists(
-            cls, "isOverflowing",
-            Boolean::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType
-        )
-        mGetRtlIconTranslationX = XposedHelpers.findMethodBestMatch(cls, "getRtlIconTranslationX", Any::class.java, View::class.java)
-        if (flagsClass != null) {
-            mPhysicalNotificationMovement = XposedHelpers.findMethodExactIfExists(flagsClass, "physicalNotificationMovement")
+            mGetActualPaddingStart = XposedHelpers.findMethodExactIfExists(cls, "getActualPaddingStart")
+            mGetActualPaddingEnd = XposedHelpers.findMethodExactIfExists(cls, "getActualPaddingEnd")
+            mGetDrawingScale = XposedHelpers.findMethodExactIfExists(cls, "getDrawingScale", View::class.java)
+            mShouldForceOverflow = XposedHelpers.findMethodExactIfExists(
+                cls, "shouldForceOverflow", Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Int::class.javaPrimitiveType
+            )
+            mIsOverflowing = XposedHelpers.findMethodExactIfExists(
+                cls, "isOverflowing",
+                Boolean::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType
+            )
+            val iconStateCls = XposedHelpers.findClassIfExists(
+                "com.android.systemui.statusbar.phone.NotificationIconContainer\$IconState",
+                cls.classLoader
+            )
+            if (iconStateCls != null) {
+                mGetRtlIconTranslationX = XposedHelpers.findMethodExactIfExists(
+                    cls, "getRtlIconTranslationX", iconStateCls, View::class.java
+                )
+            }
+            if (flagsClass != null) {
+                mPhysicalNotificationMovement = XposedHelpers.findMethodExactIfExists(flagsClass, "physicalNotificationMovement")
+            }
+        } catch (_: Throwable) {
         }
     }
 
     private fun ensureSbivMembers(child: View) {
         if (sbivResolved) return
-        val c = child.javaClass
-        mSbivGetVisibleState = XposedHelpers.findMethodExactIfExists(c, "getVisibleState")
-        mSbivSetVisibleState2 = XposedHelpers.findMethodExactIfExists(
-            c, "setVisibleState", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType
-        )
-        mSbivSetVisibleState1 = XposedHelpers.findMethodExactIfExists(
-            c, "setVisibleState", Int::class.javaPrimitiveType
-        )
-        fSbivVisibleState = XposedHelpers.findFieldIfExists(c, "mVisibleState")
-        fSbivDrawingSize = XposedHelpers.findFieldIfExists(c, "mStatusBarIconDrawingSize")
-        fSbivNewIconSize = XposedHelpers.findFieldIfExists(c, "mNewStatusBarIconSize")
-        fSbivStaticDotRadius = XposedHelpers.findFieldIfExists(c, "mStaticDotRadius")
+        try {
+            val c = child.javaClass
+            mSbivGetVisibleState = XposedHelpers.findMethodExactIfExists(c, "getVisibleState")
+            mSbivSetVisibleState2 = XposedHelpers.findMethodExactIfExists(
+                c, "setVisibleState", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType
+            )
+            mSbivSetVisibleState1 = XposedHelpers.findMethodExactIfExists(
+                c, "setVisibleState", Int::class.javaPrimitiveType
+            )
+            fSbivVisibleState = XposedHelpers.findFieldIfExists(c, "mVisibleState")
+            fSbivDrawingSize = XposedHelpers.findFieldIfExists(c, "mStatusBarIconDrawingSize")
+            fSbivNewIconSize = XposedHelpers.findFieldIfExists(c, "mNewStatusBarIconSize")
+            fSbivStaticDotRadius = XposedHelpers.findFieldIfExists(c, "mStaticDotRadius")
+        } catch (_: Throwable) {
+        }
         sbivResolved = true
     }
 
     private fun ensureIconStateMembers(state: Any) {
         if (iconStateResolved) return
-        val c = state.javaClass
-        fStateVisibleState = XposedHelpers.findFieldIfExists(c, "visibleState")
-        fStateHidden = XposedHelpers.findFieldIfExists(c, "hidden")
-        fStateIconAppearAmount = XposedHelpers.findFieldIfExists(c, "iconAppearAmount")
-        fStateXTranslation = XposedHelpers.findFieldIfExists(c, "mXTranslation")
-            ?: XposedHelpers.findFieldIfExists(c, "xTranslation")
-        mStateSetXTranslation = XposedHelpers.findMethodExactIfExists(c, "setXTranslation", Float::class.javaPrimitiveType)
-        mStateGetXTranslation = XposedHelpers.findMethodExactIfExists(c, "getXTranslation")
+        try {
+            val c = state.javaClass
+            fStateVisibleState = XposedHelpers.findFieldIfExists(c, "visibleState")
+            fStateHidden = XposedHelpers.findFieldIfExists(c, "hidden")
+            fStateIconAppearAmount = XposedHelpers.findFieldIfExists(c, "iconAppearAmount")
+            fStateXTranslation = XposedHelpers.findFieldIfExists(c, "mXTranslation")
+                ?: XposedHelpers.findFieldIfExists(c, "xTranslation")
+            mStateSetXTranslation = XposedHelpers.findMethodExactIfExists(c, "setXTranslation", Float::class.javaPrimitiveType)
+            mStateGetXTranslation = XposedHelpers.findMethodExactIfExists(c, "getXTranslation")
+        } catch (_: Throwable) {
+        }
         iconStateResolved = true
     }
 
