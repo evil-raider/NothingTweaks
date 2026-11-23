@@ -297,26 +297,28 @@ class NotificationIconHooks : HookModule {
             }
 
             val availPx = availableWidthBeforeCutout(container)
-            val cutoutMargin = 13f
-            val dotGap = 4f
-            val dotExtra = if (dotChild != null) (dotGap + 2f * dotRadius) else 0f
+            val cutoutMargin = 8f
+            val dotGap = 11f
+            // Всегда резервируем место под точку, чтобы иконки стояли на одних и тех же
+            // позициях и не прыгали при появлении/исчезновении точки переполнения.
+            val dotReserve = dotGap + 2f * dotRadius
 
             val startX = 0f
             var step = iconSize.toFloat()
             var compacted = false
 
-            if (availPx > 0f && shownCount > 0) {
-                val uncompactedRight = (shownCount - 1) * iconSize + (iconSize + drawingSize) / 2f + dotExtra
+            if (availPx > 0f && max > 0) {
+                val uncompactedRight = (max - 1) * iconSize + (iconSize + drawingSize) / 2f + dotReserve
                 if (uncompactedRight > availPx - cutoutMargin) {
                     compacted = true
-                    if (shownCount > 1) {
-                        val spaceForSteps = availPx - cutoutMargin - dotExtra - startX - (iconSize + drawingSize) / 2f
-                        step = (spaceForSteps / (shownCount - 1)).coerceIn(drawingSize + 2f, iconSize.toFloat())
+                    if (max > 1) {
+                        val spaceForSteps = availPx - cutoutMargin - dotReserve - startX - (iconSize + drawingSize) / 2f
+                        step = (spaceForSteps / (max - 1)).coerceIn(drawingSize + 2f, iconSize.toFloat())
                     }
                 }
             }
 
-            if (compacted) {
+            if (compacted && shownCount > 0) {
                 val posArr = Array(shownCount) { idx ->
                     val child = shownIcons[idx]
                     val x = startX + idx * step
