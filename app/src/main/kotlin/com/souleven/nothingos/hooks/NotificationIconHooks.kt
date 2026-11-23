@@ -209,6 +209,8 @@ class NotificationIconHooks : HookModule {
         }
     }
 
+    private var lastCutoutDiag: String = ""
+
     private fun availableWidthBeforeCutout(container: ViewGroup): Float {
         if (container.layoutDirection == View.LAYOUT_DIRECTION_RTL) return -1f
         return try {
@@ -218,13 +220,12 @@ class NotificationIconHooks : HookModule {
             val screenW = screenWidthOf(container)
             // Нужен именно центральный вырез камеры сверху, не угловой (и не ландшафт без выреза сверху).
             if (topRect.left <= 0 || topRect.right >= screenW) return -1f
-            // DisplayCutout.boundingRectTop у Nothing включает широкую защитную зону (~172px),
-            // тогда как физическая линза по центру выреза заметно уже (~7-8% ширины экрана).
-            val cutoutCenter = (topRect.left + topRect.right) / 2f
-            val halfPhysicalHole = minOf(topRect.width() / 2f, screenW * 0.038f)
-            val physicalLeft = cutoutCenter - halfPhysicalHole
             val cPos = IntArray(2)
             container.getLocationOnScreen(cPos)
+            // Физическая линза расположена по центру экрана (screenW / 2) с полурадиусом ~3.5% ширины экрана
+            // (~38px на 1080p); boundingRectTop у Nothing даёт заметно более широкую программную зону.
+            val physicalLeft = screenW / 2f - screenW * 0.035f
+            lastCutoutDiag = "cX=${cPos[0]} scrW=$screenW topL=${topRect.left} topR=${topRect.right}"
             val avail = physicalLeft - cPos[0]
             if (avail > 0f) avail else -1f
         } catch (_: Throwable) {
@@ -296,8 +297,8 @@ class NotificationIconHooks : HookModule {
             }
 
             val availPx = availableWidthBeforeCutout(container)
-            val cutoutMargin = 6f
-            val dotGap = 6f
+            val cutoutMargin = 4f
+            val dotGap = 4f
             val dotExtra = if (dotChild != null) (dotGap + 2f * dotRadius) else 0f
 
             val startX = 0f
@@ -353,7 +354,8 @@ class NotificationIconHooks : HookModule {
                 XposedBridge.log(
                     "NothingTweaks: [NotificationIconHooks] sb max=$max shown=$shownCount hasDot=${dc != null} " +
                         "iconSize=$iconSize drawSize=${drawingSize.toInt()} dotOff=${dotDrawOffset.toInt()} " +
-                        "avail=${availPx.toInt()} startX=${startX.toInt()} step=${step.toInt()} dotX=${targetX.toInt()} compact=$compacted"
+                        "avail=${availPx.toInt()} startX=${startX.toInt()} step=${step.toInt()} dotX=${targetX.toInt()} " +
+                        "compact=$compacted [$lastCutoutDiag]"
                 )
             }
         } finally {
